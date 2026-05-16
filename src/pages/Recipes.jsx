@@ -1,60 +1,89 @@
 import { useState, useEffect } from 'react'
-import { Plus, ChevronDown, ChevronUp, Save, Trash2 } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../hooks/useAuth'
-import { Spinner, Badge, Modal, EmptyState } from '../components/UI'
-import { RECIPE_CATEGORIES } from '../lib/supabase'
+import { Spinner, EmptyState } from '../components/UI'
+
+// Mapping famille produit depuis la table produits
+const FAMILY_ICONS = {
+  'CLASSIC COFFEE':      '☕',
+  'HOT FLAVORED LATTE':  '☕',
+  'HOT SPECIAL':         '🍫',
+  'FRAPPUCCINO':         '🧋',
+  'ICED FLAVORED LATTE': '🧊',
+  'ICED SPECIAL':        '🧊',
+  'SMOOTHIES':           '🥤',
+  'FRESH':               '💧',
+  'COOKIESIDE':          '🍪',
+  'OUTSIDE SIGNATURE':   '⭐',
+  'OUTSIDE COMBO':       '🎯',
+  'EXTRA':               '➕',
+}
 
 export default function Recipes() {
-  const { profile } = useAuth()
-  const [recipes, setRecipes] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [expanded, setExpanded] = useState(null)
-  const [activeCategory, setActiveCategory] = useState('all')
-  const [modal, setModal] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const [compositions, setCompositions] = useState([])  // toutes les lignes
+  const [produits, setProduits]         = useState([])  // table produits pour famille + prix
+  const [loading, setLoading]           = useState(true)
+  const [search, setSearch]             = useState('')
+  const [activeFamily, setActiveFamily] = useState('all')
+  const [expanded, setExpanded]         = useState(null)
 
-  useEffect(() => { fetchRecipes() }, [])
+  useEffect(() => { fetchData() }, [])
 
-  async function fetchRecipes() {
-    const { data } = await supabase
-      .from('recipes')
-      .select('*, recipe_steps(*)')
-      .eq('active', true)
-      .order('category')
-      .order('name')
-    setRecipes((data || []).map(r => ({
-      ...r,
-      recipe_steps: (r.recipe_steps || []).sort((a, b) => a.sort_order - b.sort_order)
-    })))
+  async function fetchData() {
+    const [{ data: comp }, { data: prods }] = await Promise.all([
+      supabase.from('composition_produit')
+        .select('*')
+        .eq('type', 'produit fini')
+        .order('nom_produit')
+        .order('id'),
+      supabase.from('produits')
+        .select('id_produit, nom_produit, famille, prix')
+        .order('famille').order('nom_produit'),
+    ])
+    setCompositions(comp || [])
+    setProduits(prods || [])
     setLoading(false)
   }
 
-  const categories = ['all', ...Object.keys(RECIPE_CATEGORIES)]
-  const filtered = activeCategory === 'all' ? recipes : recipes.filter(r => r.category === activeCategory)
+  // Construire la liste des produits uniques avec leurs ingrédients
+  const recipeMap = {}
+  for (const line of compositions) {
+    if (!recipeMap[line.nom_produit]) recipeMap[line.nom_produit] = []
+    recipeMap[line.nom_produit].push(line)
+  }
 
-  async function saveRecipe({ name, category, description, cup_size, steps }) {
-    setSaving(true)
-    const { data: recipe } = await supabase
-      .from('recipes')
-      .insert({ name, category, description, cup_size })
-      .select().single()
+  // Enrichir avec famille + prix depuis table produits
+  const produitIndex = {}
+  for (const p of produits) {
+    produitIndex[p.nom_produit] = p
+  }
 
-    if (recipe && steps.length > 0) {
-      await supabase.from('recipe_steps').insert(
-        steps.map((s, i) => ({ recipe_id: recipe.id, sort_order: i + 1, label: s.label, detail: s.detail || null, value: s.value || null }))
-      )
+  const recipes = Object.entries(recipeMap).map(([nom, ingredients]) => {
+    const info = produitIndex[nom] || {}
+    return {
+      nom,
+      famille:     info.famille || 'Autre',
+      prix:        info.prix,
+      ingredients,
+      cout:        ingredients.reduce((s, i) => s + parseFloat(i.prix_achat || 0), 0),
     }
-    await fetchRecipes()
-    setSaving(false)
-    setModal(false)
-  }
+  })
 
-  async function deleteRecipe(id) {
-    await supabase.from('recipes').update({ active: false }).eq('id', id)
-    setRecipes(r => r.filter(x => x.id !== id))
-    if (expanded === id) setExpanded(null)
-  }
+  // Familles disponibles depuis les recettes
+  const families = ['all', ...Array.from(new Set(recipes.map(r => r.famille))).sort()]
+
+  const filtered = recipes.filter(r => {
+    const matchFamily = activeFamily === 'all' || r.famille === activeFamily
+    const matchSearch = !search || r.nom.toLowerCase().includes(search.toLowerCase())
+    return matchFamily && matchSearch
+  })
+
+  // Grouper par famille
+  const grouped = filtered.reduce((acc, r) => {
+    acc[r.famille] = acc[r.famille] || []
+    acc[r.famille].push(r)
+    return acc
+  }, {})
 
   if (loading) return (
     <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
@@ -65,166 +94,144 @@ export default function Recipes() {
   return (
     <>
       <div className="page-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <h1 className="page-title">Recettes</h1>
-            <p className="page-subtitle">Standards de préparation & grammages</p>
-          </div>
-          <button className="btn btn-primary" onClick={() => setModal(true)}>
-            <Plus size={15} /> Nouvelle recette
-          </button>
+        <div>
+          <h1 className="page-title">Recettes</h1>
+          <p className="page-subtitle">{recipes.length} produits · compositions et couts</p>
         </div>
       </div>
 
       <div className="page-content">
-        {/* CATEGORY TABS */}
+
+        {/* SEARCH */}
+        <div style={{ position: 'relative', marginBottom: '1rem' }}>
+          <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+          <input className="form-input" style={{ paddingLeft: '36px' }}
+            placeholder="Rechercher un produit..."
+            value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+
+        {/* FAMILLE FILTER */}
         <div style={{ display: 'flex', gap: '6px', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-          {categories.map(cat => {
-            const label = cat === 'all' ? 'Toutes' : `${RECIPE_CATEGORIES[cat]?.icon} ${RECIPE_CATEGORIES[cat]?.label}`
+          {families.map(f => {
+            const icon  = FAMILY_ICONS[f] || '•'
+            const label = f === 'all' ? 'Tout' : `${icon} ${f}`
+            const cnt   = f === 'all' ? recipes.length : recipes.filter(r => r.famille === f).length
             return (
-              <button key={cat}
-                className={`btn btn-sm ${activeCategory === cat ? 'btn-primary' : 'btn-outline'}`}
-                onClick={() => setActiveCategory(cat)}>
-                {label}
+              <button key={f}
+                className={`btn btn-sm ${activeFamily === f ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setActiveFamily(f)}
+                style={{ fontSize: '0.78rem' }}>
+                {label} <span style={{ opacity: 0.65 }}>({cnt})</span>
               </button>
             )
           })}
         </div>
 
         {filtered.length === 0 && (
-          <EmptyState icon="☕" title="Aucune recette" description="Ajoute ta première recette pour l'équipe."
-            action={<button className="btn btn-primary" onClick={() => setModal(true)}><Plus size={15} /> Nouvelle recette</button>} />
+          <EmptyState icon="☕" title="Aucune recette" description="Aucun produit ne correspond." />
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {filtered.map(recipe => {
-            const isOpen = expanded === recipe.id
-            const cat = RECIPE_CATEGORIES[recipe.category]
-            return (
-              <div key={recipe.id} className="card">
-                <div
-                  style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
-                  onClick={() => setExpanded(isOpen ? null : recipe.id)}
-                >
-                  <div style={{ width: 36, height: 36, borderRadius: 'var(--radius-sm)', background: 'var(--brown-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0 }}>
-                    {cat?.icon || '☕'}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 500 }}>{recipe.name}</div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--muted)', display: 'flex', gap: '10px', marginTop: '2px' }}>
-                      {recipe.cup_size && <span>📐 {recipe.cup_size}</span>}
-                      {recipe.description && <span>{recipe.description}</span>}
-                      <span>{recipe.recipe_steps.length} étape{recipe.recipe_steps.length > 1 ? 's' : ''}</span>
-                    </div>
-                  </div>
-                  <Badge color="gray">{cat?.label}</Badge>
-                  {isOpen ? <ChevronUp size={18} color="var(--muted)" /> : <ChevronDown size={18} color="var(--muted)" />}
-                </div>
+        {/* GROUPED RECIPES */}
+        {Object.entries(grouped).map(([famille, items]) => (
+          <div key={famille} style={{ marginBottom: '1.5rem' }}>
+            <div className="section-label">
+              {FAMILY_ICONS[famille] || '•'} {famille}
+              <span style={{ marginLeft: '8px', color: 'var(--muted)' }}>({items.length})</span>
+            </div>
 
-                {isOpen && (
-                  <div style={{ padding: '0 1.5rem 1.25rem', borderTop: '1px solid var(--brown-100)' }}>
-                    <div style={{ paddingTop: '0.75rem' }}>
-                      {recipe.recipe_steps.length === 0 && (
-                        <p style={{ color: 'var(--muted)', fontSize: '0.85rem' }}>Aucune étape définie.</p>
-                      )}
-                      {recipe.recipe_steps.map(step => (
-                        <div key={step.id} className="recipe-step">
-                          <div className="step-num">{step.sort_order}</div>
-                          <div>
-                            <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{step.label}</div>
-                            {step.detail && <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '2px' }}>{step.detail}</div>}
-                            {step.value && <div className="step-value">{step.value}</div>}
-                          </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {items.map(recipe => {
+                const isOpen = expanded === recipe.nom
+                const marge  = recipe.prix && recipe.cout
+                  ? ((recipe.prix - recipe.cout) / recipe.prix * 100).toFixed(0)
+                  : null
+
+                return (
+                  <div key={recipe.nom} className="card">
+                    {/* HEADER */}
+                    <div style={{ padding: '0.9rem 1.5rem', display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}
+                      onClick={() => setExpanded(isOpen ? null : recipe.nom)}>
+
+                      <div style={{ width: 38, height: 38, borderRadius: 'var(--radius-md)', background: 'var(--outside-cream)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0 }}>
+                        {FAMILY_ICONS[recipe.famille] || '☕'}
+                      </div>
+
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{recipe.nom}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '2px', display: 'flex', gap: '10px' }}>
+                          <span>{recipe.ingredients.length} ingredient{recipe.ingredients.length > 1 ? 's' : ''}</span>
+                          <span>Cout: <strong style={{ color: 'var(--ink)' }}>{recipe.cout.toFixed(3)} DT</strong></span>
                         </div>
-                      ))}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {recipe.prix && (
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', color: 'var(--outside-dark)' }}>
+                              {recipe.prix % 1 === 0 ? recipe.prix : recipe.prix.toFixed(1)} DT
+                            </div>
+                            {marge && (
+                              <div style={{ fontSize: '0.68rem', fontWeight: 800, color: parseInt(marge) >= 60 ? 'var(--outside-green)' : 'var(--outside-amber)' }}>
+                                Marge {marge}%
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {isOpen
+                          ? <ChevronUp size={18} color="var(--muted)" />
+                          : <ChevronDown size={18} color="var(--muted)" />}
+                      </div>
                     </div>
-                    {profile?.role === 'manager' && (
-                      <div style={{ marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--brown-50)', display: 'flex', justifyContent: 'flex-end' }}>
-                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }}
-                          onClick={() => deleteRecipe(recipe.id)}>
-                          <Trash2 size={14} /> Supprimer
-                        </button>
+
+                    {/* INGREDIENTS */}
+                    {isOpen && (
+                      <div style={{ borderTop: '1.5px solid var(--outside-cream)', padding: '0.75rem 1.5rem 1rem' }}>
+                        <table style={{ width: '100%', fontSize: '0.85rem' }}>
+                          <thead>
+                            <tr>
+                              <th style={{ textAlign: 'left', padding: '4px 0', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', fontWeight: 800, borderBottom: '1.5px solid var(--outside-cream)' }}>Ingredient</th>
+                              <th style={{ textAlign: 'right', padding: '4px 0', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', fontWeight: 800, borderBottom: '1.5px solid var(--outside-cream)' }}>Quantite</th>
+                              <th style={{ textAlign: 'right', padding: '4px 0', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', fontWeight: 800, borderBottom: '1.5px solid var(--outside-cream)' }}>Cout</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {recipe.ingredients.map((ing, i) => (
+                              <tr key={i}>
+                                <td style={{ padding: '6px 0', borderBottom: '1px solid var(--outside-cream)', fontWeight: 600 }}>{ing.matiere}</td>
+                                <td style={{ padding: '6px 0', borderBottom: '1px solid var(--outside-cream)', textAlign: 'right', color: 'var(--muted)', fontWeight: 600 }}>
+                                  {ing.quantite_m} {ing.unite}
+                                </td>
+                                <td style={{ padding: '6px 0', borderBottom: '1px solid var(--outside-cream)', textAlign: 'right', fontWeight: 700, color: 'var(--outside-dark)' }}>
+                                  {parseFloat(ing.prix_achat).toFixed(3)} DT
+                                </td>
+                              </tr>
+                            ))}
+                            {/* TOTAL */}
+                            <tr style={{ background: 'var(--outside-cream)' }}>
+                              <td colSpan={2} style={{ padding: '8px 0 4px', fontWeight: 800, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Cout total</td>
+                              <td style={{ padding: '8px 0 4px', textAlign: 'right', fontWeight: 800, color: 'var(--outside-dark)' }}>
+                                {recipe.cout.toFixed(3)} DT
+                              </td>
+                            </tr>
+                            {recipe.prix && (
+                              <tr>
+                                <td colSpan={2} style={{ padding: '4px 0', fontWeight: 800, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)' }}>Prix de vente</td>
+                                <td style={{ padding: '4px 0', textAlign: 'right', fontWeight: 800, color: 'var(--outside-orange)' }}>
+                                  {recipe.prix % 1 === 0 ? recipe.prix : recipe.prix.toFixed(1)} DT
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
-      {modal && (
-        <RecipeModal onClose={() => setModal(false)} onSave={saveRecipe} saving={saving} />
-      )}
-    </>
-  )
-}
-
-function RecipeModal({ onClose, onSave, saving }) {
-  const [form, setForm] = useState({ name: '', category: 'espresso', description: '', cup_size: '' })
-  const [steps, setSteps] = useState([{ label: '', detail: '', value: '' }])
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
-
-  const addStep = () => setSteps(s => [...s, { label: '', detail: '', value: '' }])
-  const updateStep = (i, k, v) => setSteps(s => s.map((x, j) => j === i ? { ...x, [k]: v } : x))
-  const removeStep = (i) => setSteps(s => s.filter((_, j) => j !== i))
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title="Nouvelle recette"
-      footer={
-        <>
-          <button className="btn btn-outline" onClick={onClose}>Annuler</button>
-          <button className="btn btn-primary" disabled={!form.name || saving}
-            onClick={() => onSave({ ...form, steps: steps.filter(s => s.label) })}>
-            {saving ? <Spinner size={16} /> : <Save size={15} />}
-            Créer la recette
-          </button>
-        </>
-      }
-    >
-      <div className="form-group">
-        <label className="form-label">Nom</label>
-        <input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="ex: Flat White" autoFocus />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-        <div className="form-group">
-          <label className="form-label">Catégorie</label>
-          <select className="form-select" value={form.category} onChange={e => set('category', e.target.value)}>
-            {Object.entries(RECIPE_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Volume / taille</label>
-          <input className="form-input" value={form.cup_size} onChange={e => set('cup_size', e.target.value)} placeholder="ex: 160ml" />
-        </div>
-      </div>
-      <div className="form-group">
-        <label className="form-label">Description courte</label>
-        <input className="form-input" value={form.description} onChange={e => set('description', e.target.value)} placeholder="ex: Double ristretto, micro-mousse veloutée" />
-      </div>
-
-      <div style={{ borderTop: '1px solid var(--brown-100)', paddingTop: '1rem', marginTop: '0.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-          <span className="form-label" style={{ margin: 0 }}>Étapes de préparation</span>
-          <button className="btn btn-ghost btn-sm" onClick={addStep}><Plus size={14} /> Étape</button>
-        </div>
-        {steps.map((step, i) => (
-          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
-            <input className="form-input" placeholder={`Étape ${i + 1}`} value={step.label}
-              onChange={e => updateStep(i, 'label', e.target.value)} />
-            <input className="form-input" placeholder="Valeur (ex: 18g)" value={step.value}
-              onChange={e => updateStep(i, 'value', e.target.value)} />
-            <button className="btn btn-ghost btn-icon btn-sm" onClick={() => removeStep(i)}
-              style={{ color: 'var(--danger)' }} disabled={steps.length === 1}>
-              <Trash2 size={14} />
-            </button>
+                )
+              })}
+            </div>
           </div>
         ))}
       </div>
-    </Modal>
+    </>
   )
 }
