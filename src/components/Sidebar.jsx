@@ -11,7 +11,6 @@ const navItems = [
   { to: '/rapport',   icon: Coffee,          label: 'Rapport shift',  section: null,             minRole: 'barista' },
   { to: '/stock',     icon: Package,         label: 'Stock',          section: null,             minRole: 'barista' },
   { to: '/recettes',  icon: BookOpen,        label: 'Recettes',       section: null,             minRole: 'barista' },
-  { to: '/menu',      icon: UtensilsCrossed, label: 'Menu & Tarifs',  section: null,             minRole: 'barista' },
   { to: '/standards', icon: Star,            label: 'Standards SOP',  section: null,             minRole: 'barista' },
   { to: '/equipe',    icon: Users,           label: 'Equipe',         section: 'Gestion',        minRole: 'manager' },
 ]
