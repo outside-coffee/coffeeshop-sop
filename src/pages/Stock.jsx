@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, TrendingUp, TrendingDown, Save, X } from 'lucide-react'
+import { Plus, Edit2, TrendingUp, TrendingDown, Save } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { Spinner, Badge, Modal, EmptyState } from '../components/UI'
-import { STOCK_CATEGORIES } from '../lib/supabase'
-import { format } from 'date-fns'
 
 export default function Stock() {
   const { profile } = useAuth()
@@ -19,7 +17,9 @@ export default function Stock() {
   useEffect(() => { fetchItems() }, [])
 
   async function fetchItems() {
-    const { data } = await supabase.from('stock_items').select('*').eq('active', true).order('category').order('name')
+    const { data } = await supabase
+      .from('stock_items').select('*').eq('active', true)
+      .order('category').order('name')
     setItems(data || [])
     setLoading(false)
   }
@@ -35,7 +35,8 @@ export default function Stock() {
     return Math.min(100, Math.round((item.current_qty / item.ideal_qty) * 100))
   }
 
-  const categories = ['all', ...Object.keys(STOCK_CATEGORIES)]
+  // Catégories construites dynamiquement depuis les données réelles
+  const categories = ['all', ...Array.from(new Set(items.map(i => i.category))).sort()]
   const filtered = activeCategory === 'all' ? items : items.filter(i => i.category === activeCategory)
   const lowCount = items.filter(i => getStockStatus(i) !== 'ok').length
 
@@ -100,11 +101,10 @@ export default function Stock() {
         {/* CATEGORY TABS */}
         <div style={{ display: 'flex', gap: '6px', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
           {categories.map(cat => {
-            const label = cat === 'all' ? 'Tout' : STOCK_CATEGORIES[cat]?.label
-            const cnt = cat === 'all' ? items.length : items.filter(i => i.category === cat).length
+            const label = cat === 'all' ? 'Tout' : cat
+            const cnt   = cat === 'all' ? items.length : items.filter(i => i.category === cat).length
             return (
-              <button
-                key={cat}
+              <button key={cat}
                 className={`btn btn-sm ${activeCategory === cat ? 'btn-primary' : 'btn-outline'}`}
                 onClick={() => setActiveCategory(cat)}
               >
@@ -121,7 +121,7 @@ export default function Stock() {
               <thead>
                 <tr>
                   <th>Produit</th>
-                  <th>Catégorie</th>
+                  <th>Categorie</th>
                   <th>Stock actuel</th>
                   <th>Niveau</th>
                   <th>Statut</th>
@@ -134,14 +134,12 @@ export default function Stock() {
                 )}
                 {filtered.map(item => {
                   const status = getStockStatus(item)
-                  const pct = getStockPct(item)
+                  const pct    = getStockPct(item)
                   return (
                     <tr key={item.id}>
                       <td style={{ fontWeight: 500 }}>{item.name}</td>
                       <td>
-                        <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>
-                          {STOCK_CATEGORIES[item.category]?.label || item.category}
-                        </span>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--muted)' }}>{item.category}</span>
                       </td>
                       <td>
                         <span style={{ fontWeight: 500 }}>{item.current_qty}</span>
@@ -149,26 +147,29 @@ export default function Stock() {
                       </td>
                       <td style={{ minWidth: '120px' }}>
                         <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginBottom: '3px' }}>
-                          min: {item.min_qty} / idéal: {item.ideal_qty}
+                          min: {item.min_qty} / ideal: {item.ideal_qty}
                         </div>
                         <div className="stock-bar">
                           <div className={`stock-fill ${status}`} style={{ width: `${pct}%` }} />
                         </div>
                       </td>
                       <td>
-                        {status === 'ok' && <Badge color="green">OK</Badge>}
-                        {status === 'low' && <Badge color="amber">Bas</Badge>}
+                        {status === 'ok'       && <Badge color="green">OK</Badge>}
+                        {status === 'low'      && <Badge color="amber">Bas</Badge>}
                         {status === 'critical' && <Badge color="red">Critique</Badge>}
                       </td>
                       <td>
                         <div style={{ display: 'flex', gap: '4px' }}>
-                          <button className="btn btn-ghost btn-sm btn-icon" title="Réception" onClick={() => setMovementItem({ item, mode: 'reception' })}>
+                          <button className="btn btn-ghost btn-sm btn-icon" title="Reception"
+                            onClick={() => setMovementItem({ item, mode: 'reception' })}>
                             <TrendingUp size={15} />
                           </button>
-                          <button className="btn btn-ghost btn-sm btn-icon" title="Ajustement" onClick={() => setMovementItem({ item, mode: 'adjustment' })}>
+                          <button className="btn btn-ghost btn-sm btn-icon" title="Ajustement"
+                            onClick={() => setMovementItem({ item, mode: 'adjustment' })}>
                             <TrendingDown size={15} />
                           </button>
-                          <button className="btn btn-ghost btn-sm btn-icon" title="Modifier" onClick={() => setEditItem(item)}>
+                          <button className="btn btn-ghost btn-sm btn-icon" title="Modifier"
+                            onClick={() => setEditItem(item)}>
                             <Edit2 size={15} />
                           </button>
                         </div>
@@ -182,7 +183,6 @@ export default function Stock() {
         </div>
       </div>
 
-      {/* MOVEMENT MODAL */}
       {movementItem && (
         <MovementModal
           item={movementItem.item}
@@ -193,10 +193,10 @@ export default function Stock() {
         />
       )}
 
-      {/* EDIT ITEM MODAL */}
       {(editItem || addModal) && (
         <ItemModal
           item={editItem}
+          categories={categories.filter(c => c !== 'all')}
           onClose={() => { setEditItem(null); setAddModal(false) }}
           onSave={saveItem}
           saving={saving}
@@ -207,21 +207,18 @@ export default function Stock() {
 }
 
 function MovementModal({ item, mode, onClose, onSave, saving }) {
-  const [qty, setQty] = useState('')
+  const [qty, setQty]   = useState('')
   const [note, setNote] = useState('')
 
   return (
-    <Modal
-      open
-      onClose={onClose}
-      title={mode === 'reception' ? `Réception — ${item.name}` : `Ajustement — ${item.name}`}
+    <Modal open onClose={onClose}
+      title={mode === 'reception' ? `Reception — ${item.name}` : `Ajustement — ${item.name}`}
       footer={
         <>
           <button className="btn btn-outline" onClick={onClose}>Annuler</button>
           <button className="btn btn-primary" disabled={!qty || saving}
             onClick={() => onSave({ item, type: mode, qty: mode === 'reception' ? +qty : -Math.abs(+qty), note })}>
-            {saving ? <Spinner size={16} /> : <Save size={15} />}
-            Enregistrer
+            {saving ? <Spinner size={16} /> : <Save size={15} />} Enregistrer
           </button>
         </>
       }
@@ -231,75 +228,67 @@ function MovementModal({ item, mode, onClose, onSave, saving }) {
       </div>
       <div className="form-group">
         <label className="form-label">
-          {mode === 'reception' ? 'Quantité reçue' : 'Quantité à soustraire'} ({item.unit})
+          {mode === 'reception' ? 'Quantite recue' : 'Quantite a soustraire'} ({item.unit})
         </label>
         <input className="form-input" type="number" min="0" step="0.1"
-          value={qty} onChange={e => setQty(e.target.value)} autoFocus
-          placeholder="ex: 5" />
+          value={qty} onChange={e => setQty(e.target.value)} autoFocus placeholder="ex: 500" />
       </div>
       <div className="form-group">
         <label className="form-label">Note (optionnel)</label>
-        <input className="form-input" type="text"
-          value={note} onChange={e => setNote(e.target.value)}
-          placeholder={mode === 'reception' ? 'Livraison fournisseur X' : 'Casse, inventaire...'} />
+        <input className="form-input" type="text" value={note} onChange={e => setNote(e.target.value)}
+          placeholder={mode === 'reception' ? 'Livraison fournisseur' : 'Casse, inventaire...'} />
       </div>
     </Modal>
   )
 }
 
-function ItemModal({ item, onClose, onSave, saving }) {
+function ItemModal({ item, categories, onClose, onSave, saving }) {
   const [form, setForm] = useState(item || {
-    name: '', category: 'coffee', unit: 'kg',
+    name: '', category: categories[0] || '', unit: 'g',
     current_qty: 0, min_qty: 0, ideal_qty: 0, supplier: ''
   })
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   return (
-    <Modal
-      open
-      onClose={onClose}
+    <Modal open onClose={onClose}
       title={item ? 'Modifier le produit' : 'Nouveau produit'}
       footer={
         <>
           <button className="btn btn-outline" onClick={onClose}>Annuler</button>
           <button className="btn btn-primary" disabled={!form.name || saving}
             onClick={() => onSave(form)}>
-            {saving ? <Spinner size={16} /> : <Save size={15} />}
-            Enregistrer
+            {saving ? <Spinner size={16} /> : <Save size={15} />} Enregistrer
           </button>
         </>
       }
     >
       <div className="form-group">
-        <label className="form-label">Nom du produit</label>
-        <input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} placeholder="ex: Lait d'avoine" autoFocus />
+        <label className="form-label">Nom</label>
+        <input className="form-input" value={form.name}
+          onChange={e => set('name', e.target.value)} autoFocus />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
         <div className="form-group">
-          <label className="form-label">Catégorie</label>
+          <label className="form-label">Categorie</label>
           <select className="form-select" value={form.category} onChange={e => set('category', e.target.value)}>
-            {Object.entries(STOCK_CATEGORIES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div className="form-group">
-          <label className="form-label">Unité</label>
+          <label className="form-label">Unite</label>
           <select className="form-select" value={form.unit} onChange={e => set('unit', e.target.value)}>
-            {['kg', 'g', 'L', 'cl', 'unité', 'bouteille', 'sac', 'boîte'].map(u => <option key={u}>{u}</option>)}
+            {['g', 'kg', 'ml', 'L', 'unite', 'Feuilles', 'bouteille', 'sac', 'boite'].map(u => <option key={u}>{u}</option>)}
           </select>
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-        {[['current_qty', 'Stock actuel'], ['min_qty', 'Seuil minimum'], ['ideal_qty', 'Stock idéal']].map(([k, l]) => (
+        {[['current_qty','Stock actuel'],['min_qty','Seuil minimum'],['ideal_qty','Stock ideal']].map(([k, l]) => (
           <div className="form-group" key={k}>
             <label className="form-label">{l}</label>
             <input className="form-input" type="number" step="0.1" min="0"
               value={form[k]} onChange={e => set(k, parseFloat(e.target.value) || 0)} />
           </div>
         ))}
-      </div>
-      <div className="form-group">
-        <label className="form-label">Fournisseur (optionnel)</label>
-        <input className="form-input" value={form.supplier || ''} onChange={e => set('supplier', e.target.value)} />
       </div>
     </Modal>
   )
