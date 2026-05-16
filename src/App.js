@@ -10,6 +10,7 @@ import ShiftReport from './pages/ShiftReport'
 import Stock from './pages/Stock'
 import Recipes from './pages/Recipes'
 import Standards from './pages/Standards'
+import Team from './pages/Team'
 import { Spinner } from './components/UI'
 
 function ProtectedLayout() {
@@ -35,6 +36,7 @@ function ProtectedLayout() {
           <Route path="/stock" element={<Stock />} />
           <Route path="/recettes" element={<Recipes />} />
           <Route path="/standards" element={<Standards />} />
+          <Route path="/equipe" element={<Team />} />
         </Routes>
       </main>
       <ToastContainer />

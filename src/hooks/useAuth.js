@@ -3,6 +3,15 @@ import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext({})
 
+// Helper — true if role has at least the requested level
+// admin > manager > barista
+export function hasRole(profile, minRole) {
+  const levels = { barista: 0, manager: 1, admin: 2 }
+  const userLevel = levels[profile?.role] ?? -1
+  const required = levels[minRole] ?? 0
+  return userLevel >= required
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [profile, setProfile] = useState(null)
@@ -14,7 +23,6 @@ export function AuthProvider({ children }) {
       if (session?.user) fetchProfile(session.user.id)
       else setLoading(false)
     })
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) fetchProfile(session.user.id)
@@ -34,26 +42,12 @@ export function AuthProvider({ children }) {
     return { error }
   }
 
-  async function signUp(email, password, name, role) {
-    const { data, error } = await supabase.auth.signUp({ email, password })
-    if (error) return { error }
-    if (data.user) {
-      const colors = ['#C8956C', '#4A7C59', '#3D5A8A', '#8B6B8A', '#D4A853']
-      const color = colors[Math.floor(Math.random() * colors.length)]
-      await supabase.from('profiles').insert({
-        id: data.user.id, name, role,
-        avatar_color: color
-      })
-    }
-    return { error: null }
-  }
-
   async function signOut() {
     await supabase.auth.signOut()
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signUp, signOut, fetchProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, fetchProfile }}>
       {children}
     </AuthContext.Provider>
   )

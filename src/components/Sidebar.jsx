@@ -1,56 +1,59 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import {
-  Coffee, CheckSquare, BarChart2, Package,
-  BookOpen, LogOut, Menu, X, Star
-} from 'lucide-react'
-import { useAuth } from '../hooks/useAuth'
+import { Coffee, CheckSquare, BarChart2, Package, BookOpen, LogOut, Menu, X, Star, Users, Shield } from 'lucide-react'
+import { useAuth, hasRole } from '../hooks/useAuth'
 import { Avatar } from './UI'
 
 const navItems = [
-  { to: '/', icon: BarChart2, label: 'Dashboard', section: 'Vue d\'ensemble' },
-  { to: '/ouverture', icon: CheckSquare, label: 'Ouverture', section: 'Opérations' },
-  { to: '/fermeture', icon: CheckSquare, label: 'Fermeture', section: null },
-  { to: '/rapport', icon: Coffee, label: 'Rapport de shift', section: null },
-  { to: '/stock', icon: Package, label: 'Stock', section: null },
-  { to: '/recettes', icon: BookOpen, label: 'Recettes', section: null },
-  { to: '/standards', icon: Star, label: 'Standards SOP', section: null },
+  { to: '/', icon: BarChart2, label: 'Dashboard', section: "Vue d'ensemble", minRole: 'barista' },
+  { to: '/ouverture', icon: CheckSquare, label: 'Ouverture', section: 'Opérations', minRole: 'barista' },
+  { to: '/fermeture', icon: CheckSquare, label: 'Fermeture', section: null, minRole: 'barista' },
+  { to: '/rapport', icon: Coffee, label: 'Rapport de shift', section: null, minRole: 'barista' },
+  { to: '/stock', icon: Package, label: 'Stock', section: null, minRole: 'barista' },
+  { to: '/recettes', icon: BookOpen, label: 'Recettes', section: null, minRole: 'barista' },
+  { to: '/standards', icon: Star, label: 'Standards SOP', section: null, minRole: 'barista' },
+  { to: '/equipe', icon: Users, label: 'Equipe', section: 'Gestion', minRole: 'manager' },
 ]
+
+const ROLE_STYLES = {
+  admin:   { label: 'Admin',   color: '#B04A3A' },
+  manager: { label: 'Manager', color: '#D4A853' },
+  barista: { label: 'Barista', color: 'var(--brown-400)' },
+}
 
 export default function Sidebar() {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  const handleSignOut = async () => {
-    await signOut()
-    navigate('/login')
-  }
+  const handleSignOut = async () => { await signOut(); navigate('/login') }
+
+  const roleStyle = ROLE_STYLES[profile?.role] || ROLE_STYLES.barista
 
   const sidebarContent = (
     <>
       <div className="sidebar-logo">
-        <h1>☕ SOP Manager</h1>
-        <span>Coffeeshop Operations</span>
+        <h1>☕ Outside</h1>
+        <span>SOP Manager</span>
       </div>
 
       <nav className="sidebar-nav">
-        {navItems.map((item, i) => (
-          <div key={item.to}>
-            {item.section && (
-              <div className="nav-section-label">{item.section}</div>
-            )}
-            <NavLink
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
-              onClick={() => setMobileOpen(false)}
-            >
-              <item.icon size={16} />
-              {item.label}
-            </NavLink>
-          </div>
-        ))}
+        {navItems
+          .filter(item => hasRole(profile, item.minRole))
+          .map(item => (
+            <div key={item.to}>
+              {item.section && <div className="nav-section-label">{item.section}</div>}
+              <NavLink
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+                onClick={() => setMobileOpen(false)}
+              >
+                <item.icon size={16} />
+                {item.label}
+              </NavLink>
+            </div>
+          ))}
       </nav>
 
       <div className="sidebar-footer">
@@ -58,16 +61,15 @@ export default function Sidebar() {
           <Avatar name={profile?.name || '?'} color={profile?.avatar_color} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="user-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {profile?.name || 'Chargement…'}
+              {profile?.name || '…'}
             </div>
-            <div className="user-role">{profile?.role}</div>
+            <div style={{ fontSize: '0.7rem', color: roleStyle.color, display: 'flex', alignItems: 'center', gap: '3px' }}>
+              {profile?.role === 'admin' && <Shield size={10} />}
+              {roleStyle.label}
+            </div>
           </div>
-          <button
-            className="btn btn-ghost btn-icon"
-            style={{ color: 'var(--brown-300)', padding: '4px' }}
-            onClick={handleSignOut}
-            title="Se déconnecter"
-          >
+          <button className="btn btn-ghost btn-icon" style={{ color: 'var(--brown-300)', padding: '4px' }}
+            onClick={handleSignOut} title="Se déconnecter">
             <LogOut size={16} />
           </button>
         </div>
@@ -77,29 +79,17 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile header */}
       <div className="mobile-header">
-        <button
-          className="btn btn-ghost btn-icon"
-          style={{ color: 'white' }}
-          onClick={() => setMobileOpen(true)}
-        >
+        <button className="btn btn-ghost btn-icon" style={{ color: 'white' }} onClick={() => setMobileOpen(true)}>
           <Menu size={20} />
         </button>
-        <span style={{ color: 'white', fontFamily: 'var(--font-display)', fontSize: '1rem' }}>
-          ☕ SOP Manager
-        </span>
+        <span style={{ color: 'white', fontFamily: 'var(--font-display)', fontSize: '1rem' }}>☕ Outside</span>
       </div>
 
-      {/* Desktop sidebar */}
       <aside className={`sidebar${mobileOpen ? ' open' : ''}`}>
         {mobileOpen && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0.75rem 1rem 0' }}>
-            <button
-              className="btn btn-ghost btn-icon"
-              style={{ color: 'var(--brown-300)' }}
-              onClick={() => setMobileOpen(false)}
-            >
+            <button className="btn btn-ghost btn-icon" style={{ color: 'var(--brown-300)' }} onClick={() => setMobileOpen(false)}>
               <X size={18} />
             </button>
           </div>
@@ -107,11 +97,7 @@ export default function Sidebar() {
         {sidebarContent}
       </aside>
 
-      {/* Mobile overlay */}
-      <div
-        className={`overlay-bg${mobileOpen ? ' show' : ''}`}
-        onClick={() => setMobileOpen(false)}
-      />
+      <div className={`overlay-bg${mobileOpen ? ' show' : ''}`} onClick={() => setMobileOpen(false)} />
     </>
   )
 }
