@@ -230,7 +230,7 @@ export default function Recipes() {
         .eq('type', 'produit fini')
         .order('nom_produit').order('id'),
       supabase.from('produits')
-        .select('nom_produit, famille, cup_size')
+        .select('nom_produit, famille')
         .order('famille').order('nom_produit'),
     ])
     setCompositions(comp || [])
@@ -245,10 +245,10 @@ export default function Recipes() {
   }
 
   const produitIndex = {}
-  for (const p of produits) { produitIndex[p.nom_produit] = p }
+  for (const p of produits) { produitIndex[p.nom_produit.toUpperCase().trim()] = p }
 
   const recipes = Object.entries(recipeMap).map(([nom, ingredients]) => {
-    const info = produitIndex[nom] || {}
+    const info = produitIndex[nom.toUpperCase().trim()] || {}
     return {
       nom,
       famille:     info.famille || 'Autre',
