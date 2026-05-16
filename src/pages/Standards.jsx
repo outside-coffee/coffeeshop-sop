@@ -6,13 +6,13 @@ const OUTSIDE_STANDARDS = {
     title: 'Accueil & séquence de service',
     icon: '👋',
     steps: [
-      { step: 'Accueil (0–30 sec)', action: '«\u00a0Marhba bik fi Outside\u00a0!» + sourire + contact visuel' },
+      { step: 'Accueil (0–30 sec)', action: '« Marhba bik fi Outside !» + sourire + contact visuel' },
       { step: 'Installation', action: 'Proposer une table ou laisser choisir — présenter les zones' },
-      { step: 'Commande (max 2 min)', action: '«\u00a0Chno theb tichreb lyoum\u00a0? Les spécialités du jour sont…\u00a0»' },
-      { step: 'Confirmation', action: 'Répéter la commande\u00a0: «\u00a0Donc un flat white et un jus d'orange\u00a0?»' },
-      { step: 'Service', action: 'Poser la boisson avec le sourire\u00a0: «\u00a0Tafadhal, seha w hana\u00a0!»' },
-      { step: 'Check 5 min après', action: '«\u00a0Kol chay cava\u00a0? Theb haja okhra\u00a0?»' },
-      { step: 'Au revoir', action: '«\u00a0Chokran w narouk qrib\u00a0! Nhar saïd\u00a0!» + sourire' },
+      { step: 'Commande (max 2 min)', action: '« Chno theb tichreb lyoum ? Les spécialités du jour sont… »' },
+      { step: 'Confirmation', action: "Répéter la commande : « Donc un flat white et un jus d'orange ?»" },
+      { step: 'Service', action: 'Poser la boisson avec le sourire : « Tafadhal, seha w hana !»' },
+      { step: 'Check 5 min après', action: '« Kol chay cava ? Theb haja okhra ?»' },
+      { step: 'Au revoir', action: '« Chokran w narouk qrib ! Nhar saïd !» + sourire' },
     ]
   },
   standards: {
@@ -64,9 +64,9 @@ const OUTSIDE_STANDARDS = {
       'Ne jamais réchauffer du lait vapeur une deuxième fois — recommencer de zéro',
       'Ne jamais servir un espresso extrait depuis plus de 30 secondes — le refaire',
       'Ne jamais goûter avec une cuillère qu\'on remet dans la boisson',
-      'Ne jamais utiliser du lait périmé, même «\u00a0pour tester\u00a0»',
+      'Ne jamais utiliser du lait périmé, même « pour tester »',
       'Ne jamais laisser la machine sans surveillance',
-      'Ne jamais dire «\u00a0non\u00a0» sans proposer une alternative',
+      'Ne jamais dire « non » sans proposer une alternative',
       'Ne jamais parler entre collègues devant le client',
       'Ne jamais mettre son argent personnel dans la caisse pour compenser une erreur',
     ]
@@ -75,7 +75,7 @@ const OUTSIDE_STANDARDS = {
     title: 'Situations d\'urgence & difficiles',
     icon: '🚨',
     protocols: [
-      { situation: 'Mauvaise commande', response: 'Refaire immédiatement sans discussion. «\u00a0Je vous refais ça tout de suite.»' },
+      { situation: 'Mauvaise commande', response: 'Refaire immédiatement sans discussion. « Je vous refais ça tout de suite.»' },
       { situation: 'Longue attente', response: 'S\'excuser, expliquer, proposer de l\'eau pendant l\'attente' },
       { situation: 'Client agressif', response: 'Rester calme, baisser le ton, appeler le responsable immédiatement' },
       { situation: 'Commande oubliée', response: 'S\'excuser sincèrement, priorité immédiate, offrir un geste commercial' },
@@ -105,29 +105,29 @@ const OUTSIDE_STANDARDS = {
 }
 
 const WATER_SCRIPTS = [
-  { moment: 'À la prise de commande (toujours)', phrase: '«\u00a0Et pourquoi pas une eau fraîche\u00a0? On a des plateaux et des petites bouteilles.»' },
-  { moment: 'Client commande un espresso', phrase: '«\u00a0Je t\'amène une petite eau avec le café\u00a0?»' },
-  { moment: 'Client commande smoothie / frappé', phrase: '«\u00a0Une eau plate avec ta commande\u00a0? N\'oublie pas l\'hydratation\u00a0!»' },
-  { moment: 'Client vient travailler avec laptop', phrase: '«\u00a0Je pose une bouteille d\'eau sur la table\u00a0?»' },
-  { moment: 'Check 5 min après le service', phrase: '«\u00a0Tu veux que je t\'amène une eau fraîche\u00a0?»' },
-  { moment: 'Journée chaude', phrase: '«\u00a0Il fait chaud aujourd\'hui — une eau fraîche avec ton café\u00a0?»' },
+  { moment: 'À la prise de commande (toujours)', phrase: '« Et pourquoi pas une eau fraîche ? On a des plateaux et des petites bouteilles.»' },
+  { moment: 'Client commande un espresso', phrase: '« Je t\'amène une petite eau avec le café ?»' },
+  { moment: 'Client commande smoothie / frappé', phrase: '« Une eau plate avec ta commande ? N\'oublie pas l\'hydratation !»' },
+  { moment: 'Client vient travailler avec laptop', phrase: '« Je pose une bouteille d\'eau sur la table ?»' },
+  { moment: 'Check 5 min après le service', phrase: '« Tu veux que je t\'amène une eau fraîche ?»' },
+  { moment: 'Journée chaude', phrase: '« Il fait chaud aujourd\'hui — une eau fraîche avec ton café ?»' },
 ]
 
 const COOKIE_SCRIPTS = [
-  { moment: 'À la prise de commande (café)', phrase: '«\u00a0Et un cookie avec le café\u00a0? Ils sont arrivés ce matin, tout frais.»' },
-  { moment: 'Client hésite sur son choix', phrase: '«\u00a0Le cookie [nom] va super bien avec le latte — les habitués adorent.»' },
-  { moment: 'Client seul avec laptop', phrase: '«\u00a0Je t\'amène un cookie\u00a0? Carburant idéal pour bosser\u00a0!»' },
-  { moment: 'Groupe / amis', phrase: '«\u00a0Je vous mets une assiette de cookies à partager\u00a0?»' },
-  { moment: 'Client finit sa boisson', phrase: '«\u00a0Tu veux un cookie pour finir\u00a0?»' },
-  { moment: 'Fin d\'après-midi (coup de mou)', phrase: '«\u00a0Cookie pour la pause de 16h45\u00a0?»' },
+  { moment: 'À la prise de commande (café)', phrase: '« Et un cookie avec le café ? Ils sont arrivés ce matin, tout frais.»' },
+  { moment: 'Client hésite sur son choix', phrase: '« Le cookie [nom] va super bien avec le latte — les habitués adorent.»' },
+  { moment: 'Client seul avec laptop', phrase: '« Je t\'amène un cookie ? Carburant idéal pour bosser !»' },
+  { moment: 'Groupe / amis', phrase: '« Je vous mets une assiette de cookies à partager ?»' },
+  { moment: 'Client finit sa boisson', phrase: '« Tu veux un cookie pour finir ?»' },
+  { moment: 'Fin d\'après-midi (coup de mou)', phrase: '« Cookie pour la pause de 16h45 ?»' },
 ]
 
 const COMBO_SCRIPTS = [
-  { type: 'Café classique seul', phrase: '«\u00a0Et j\'ajoute une eau plate et un cookie chocolat\u00a0?»' },
-  { type: 'Boisson sucrée / frappé', phrase: '«\u00a0Une eau pour équilibrer et un cookie pour le plaisir\u00a0?»' },
-  { type: 'Client pressé', phrase: '«\u00a0Rapide — eau et cookie à emporter\u00a0?»' },
-  { type: 'Client fidèle', phrase: '«\u00a0Ton habituel — et on ajoute un cookie aujourd\'hui\u00a0?»' },
-  { type: 'Première visite', phrase: '«\u00a0Bienvenue\u00a0! On a des cookies maison — tu essaies avec ton café\u00a0?»' },
+  { type: 'Café classique seul', phrase: '« Et j\'ajoute une eau plate et un cookie chocolat ?»' },
+  { type: 'Boisson sucrée / frappé', phrase: '« Une eau pour équilibrer et un cookie pour le plaisir ?»' },
+  { type: 'Client pressé', phrase: '« Rapide — eau et cookie à emporter ?»' },
+  { type: 'Client fidèle', phrase: '« Ton habituel — et on ajoute un cookie aujourd\'hui ?»' },
+  { type: 'Première visite', phrase: '« Bienvenue ! On a des cookies maison — tu essaies avec ton café ?»' },
 ]
 
 function Section({ title, icon, children, defaultOpen = false }) {
@@ -239,7 +239,7 @@ export default function Standards() {
         <Section title={s.espresso.title} icon={s.espresso.icon}>
           <StandardsTable items={s.espresso.items} />
           <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: '#FEF3DC', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', color: '#7A5000' }}>
-            ⚠️ Machine ne chauffe pas correctement\u00a0? 1. Vérifier l'interrupteur principal (ON). 2. Vérifier la pression (8–9 bars). 3. Si problème persiste\u00a0: appeler le responsable technique immédiatement. 4. Prévoir des alternatives\u00a0: café filtre, boissons froides. Ne pas servir un espresso raté sans en informer le responsable.
+            ⚠️ Machine ne chauffe pas correctement ? 1. Vérifier l'interrupteur principal (ON). 2. Vérifier la pression (8–9 bars). 3. Si problème persiste : appeler le responsable technique immédiatement. 4. Prévoir des alternatives : café filtre, boissons froides. Ne pas servir un espresso raté sans en informer le responsable.
           </div>
         </Section>
 
@@ -249,7 +249,7 @@ export default function Standards() {
 
         <Section title={s.crossselling.title} icon={s.crossselling.icon}>
           <div style={{ padding: '0.75rem 1rem', background: 'var(--brown-50)', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', marginTop: '0.75rem', borderLeft: '3px solid var(--accent)' }}>
-            <strong>La règle d'or du cross-selling Outside :</strong> Proposer une seule fois, avec le sourire, au bon moment. Ne jamais insister. «\u00a0Non merci\u00a0» s'accepte avec courtoisie.
+            <strong>La règle d'or du cross-selling Outside :</strong> Proposer une seule fois, avec le sourire, au bon moment. Ne jamais insister. « Non merci » s'accepte avec courtoisie.
           </div>
 
           <div style={{ marginTop: '1.25rem' }}>
@@ -266,7 +266,7 @@ export default function Standards() {
             <div className="section-label">🎯 Combo gagnant — Eau + Cookie</div>
             <div style={{ padding: '0.75rem 1rem', background: 'var(--brown-800)', borderRadius: 'var(--radius-md)', marginBottom: '0.75rem' }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--brown-300)', marginBottom: '4px' }}>La phrase Outside</div>
-              <div style={{ fontSize: '0.95rem', color: 'var(--cream)', fontStyle: 'italic' }}>«\u00a0Mzien — et j'ajoute une eau fraîche et un cookie [nom du cookie]\u00a0?»</div>
+              <div style={{ fontSize: '0.95rem', color: 'var(--cream)', fontStyle: 'italic' }}>« Mzien — et j'ajoute une eau fraîche et un cookie [nom du cookie] ?»</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--brown-300)', marginTop: '4px' }}>Dire avec le sourire au moment de confirmer la commande — taux de conversion élevé.</div>
             </div>
             <ScriptTable scripts={COMBO_SCRIPTS} />
