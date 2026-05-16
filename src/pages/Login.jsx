@@ -19,7 +19,7 @@ export default function LoginPage() {
     if (error) {
       const msgs = {
         'Invalid login credentials': 'Email ou mot de passe incorrect',
-        'Email not confirmed': 'Compte non confirmé — contacte le manager',
+        'Email not confirmed': 'Compte non confirme — contacte le manager',
       }
       setError(msgs[error.message] || 'Erreur de connexion — contacte le manager')
     } else {
@@ -32,53 +32,39 @@ export default function LoginPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-logo">
-          <h1>☕ Outside</h1>
-          <p>SOP Manager — Your Everyday Escape</p>
+          <h1>Outside</h1>
+          <p>Your Everyday Escape</p>
         </div>
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label className="form-label">Email</label>
-            <input
-              className="form-input"
-              type="email"
+            <input className="form-input" type="email"
               placeholder="prenom@outside.tn"
-              value={form.email}
-              onChange={e => set('email', e.target.value)}
-              autoFocus
-              required
-            />
+              value={form.email} onChange={e => set('email', e.target.value)}
+              autoFocus required />
           </div>
-
           <div className="form-group">
             <label className="form-label">Mot de passe</label>
-            <input
-              className="form-input"
-              type="password"
+            <input className="form-input" type="password"
               placeholder="••••••••"
-              value={form.password}
-              onChange={e => set('password', e.target.value)}
-              required
-            />
+              value={form.password} onChange={e => set('password', e.target.value)}
+              required />
           </div>
 
           {error && (
-            <div style={{
-              background: '#FDEEEC', color: 'var(--danger)',
-              fontSize: '0.85rem', padding: '0.6rem 0.9rem',
-              borderRadius: 'var(--radius-sm)', marginBottom: '1rem'
-            }}>
+            <div style={{ background: '#FDEEEC', color: 'var(--danger)', fontSize: '0.85rem', padding: '0.65rem 1rem', borderRadius: 'var(--radius-md)', marginBottom: '1rem', fontWeight: 600 }}>
               {error}
             </div>
           )}
 
           <button className="btn btn-primary" type="submit" disabled={loading}
-            style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}>
+            style={{ width: '100%', justifyContent: 'center', padding: '0.85rem', fontSize: '1rem' }}>
             {loading ? <Spinner size={18} /> : 'Se connecter'}
           </button>
         </form>
 
-        <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.8rem', color: 'var(--muted)' }}>
+        <p style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.82rem', color: 'var(--muted)', fontWeight: 600 }}>
           Pas de compte ? Contacte le manager.
         </p>
       </div>

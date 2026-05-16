@@ -1,24 +1,25 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { Coffee, CheckSquare, BarChart2, Package, BookOpen, LogOut, Menu, X, Star, Users, Shield } from 'lucide-react'
+import { Coffee, CheckSquare, BarChart2, Package, BookOpen, LogOut, Menu as MenuIcon, X, Star, Users, Shield, UtensilsCrossed } from 'lucide-react'
 import { useAuth, hasRole } from '../hooks/useAuth'
 import { Avatar } from './UI'
 
 const navItems = [
-  { to: '/', icon: BarChart2, label: 'Dashboard', section: "Vue d'ensemble", minRole: 'barista' },
-  { to: '/ouverture', icon: CheckSquare, label: 'Ouverture', section: 'Opérations', minRole: 'barista' },
-  { to: '/fermeture', icon: CheckSquare, label: 'Fermeture', section: null, minRole: 'barista' },
-  { to: '/rapport', icon: Coffee, label: 'Rapport de shift', section: null, minRole: 'barista' },
-  { to: '/stock', icon: Package, label: 'Stock', section: null, minRole: 'barista' },
-  { to: '/recettes', icon: BookOpen, label: 'Recettes', section: null, minRole: 'barista' },
-  { to: '/standards', icon: Star, label: 'Standards SOP', section: null, minRole: 'barista' },
-  { to: '/equipe', icon: Users, label: 'Equipe', section: 'Gestion', minRole: 'manager' },
+  { to: '/',          icon: BarChart2,       label: 'Dashboard',      section: "Vue d'ensemble", minRole: 'barista' },
+  { to: '/ouverture', icon: CheckSquare,     label: 'Ouverture',      section: 'Operations',     minRole: 'barista' },
+  { to: '/fermeture', icon: CheckSquare,     label: 'Fermeture',      section: null,             minRole: 'barista' },
+  { to: '/rapport',   icon: Coffee,          label: 'Rapport shift',  section: null,             minRole: 'barista' },
+  { to: '/stock',     icon: Package,         label: 'Stock',          section: null,             minRole: 'barista' },
+  { to: '/recettes',  icon: BookOpen,        label: 'Recettes',       section: null,             minRole: 'barista' },
+  { to: '/menu',      icon: UtensilsCrossed, label: 'Menu & Tarifs',  section: null,             minRole: 'barista' },
+  { to: '/standards', icon: Star,            label: 'Standards SOP',  section: null,             minRole: 'barista' },
+  { to: '/equipe',    icon: Users,           label: 'Equipe',         section: 'Gestion',        minRole: 'manager' },
 ]
 
 const ROLE_STYLES = {
-  admin:   { label: 'Admin',   color: '#B04A3A' },
-  manager: { label: 'Manager', color: '#D4A853' },
-  barista: { label: 'Barista', color: 'var(--brown-400)' },
+  admin:   { label: 'Admin',   color: 'var(--outside-orange)' },
+  manager: { label: 'Manager', color: 'var(--outside-amber)'  },
+  barista: { label: 'Barista', color: 'rgba(255,255,255,0.4)' },
 }
 
 export default function Sidebar() {
@@ -27,14 +28,13 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const handleSignOut = async () => { await signOut(); navigate('/login') }
-
   const roleStyle = ROLE_STYLES[profile?.role] || ROLE_STYLES.barista
 
   const sidebarContent = (
     <>
       <div className="sidebar-logo">
-        <h1>☕ Outside</h1>
-        <span>SOP Manager</span>
+        <h1>Outside</h1>
+        <span>Your Everyday Escape</span>
       </div>
 
       <nav className="sidebar-nav">
@@ -61,15 +61,16 @@ export default function Sidebar() {
           <Avatar name={profile?.name || '?'} color={profile?.avatar_color} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="user-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {profile?.name || '…'}
+              {profile?.name || '...'}
             </div>
-            <div style={{ fontSize: '0.7rem', color: roleStyle.color, display: 'flex', alignItems: 'center', gap: '3px' }}>
-              {profile?.role === 'admin' && <Shield size={10} />}
+            <div style={{ fontSize: '0.68rem', color: roleStyle.color, display: 'flex', alignItems: 'center', gap: '3px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              {profile?.role === 'admin' && <Shield size={9} />}
               {roleStyle.label}
             </div>
           </div>
-          <button className="btn btn-ghost btn-icon" style={{ color: 'var(--brown-300)', padding: '4px' }}
-            onClick={handleSignOut} title="Se déconnecter">
+          <button className="btn btn-ghost btn-icon"
+            style={{ color: 'rgba(255,255,255,0.4)', padding: '6px' }}
+            onClick={handleSignOut} title="Se deconnecter">
             <LogOut size={16} />
           </button>
         </div>
@@ -81,15 +82,15 @@ export default function Sidebar() {
     <>
       <div className="mobile-header">
         <button className="btn btn-ghost btn-icon" style={{ color: 'white' }} onClick={() => setMobileOpen(true)}>
-          <Menu size={20} />
+          <MenuIcon size={20} />
         </button>
-        <span style={{ color: 'white', fontFamily: 'var(--font-display)', fontSize: '1rem' }}>☕ Outside</span>
+        <span style={{ color: 'white', fontFamily: 'var(--font-display)', fontSize: '1.1rem' }}>Outside</span>
       </div>
 
       <aside className={`sidebar${mobileOpen ? ' open' : ''}`}>
         {mobileOpen && (
           <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0.75rem 1rem 0' }}>
-            <button className="btn btn-ghost btn-icon" style={{ color: 'var(--brown-300)' }} onClick={() => setMobileOpen(false)}>
+            <button className="btn btn-ghost btn-icon" style={{ color: 'rgba(255,255,255,0.5)' }} onClick={() => setMobileOpen(false)}>
               <X size={18} />
             </button>
           </div>
