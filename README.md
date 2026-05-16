@@ -6,6 +6,7 @@ Hébergée gratuitement sur **Vercel** + **Supabase**.
 
 ---
 
+
 ## 🚀 Mise en ligne — guide complet
 
 ### Étape 1 — Créer le projet Supabase
