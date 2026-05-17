@@ -31,6 +31,7 @@ const ALL_NAV = [
   { to: '/recettes',  icon: BookOpen,    label: 'Recettes',   section: null,             minRole: 'barista' },
   { to: '/standards', icon: Star,        label: 'Standards',  section: null,             minRole: 'barista' },
   { to: '/equipe',    icon: Users,       label: 'Equipe',     section: 'Gestion',        minRole: 'manager' },
+  { to: '/ecarts',    icon: TrendingUp,  label: 'Ecarts',     section: null,             minRole: 'manager' },
 ]
 
 const ROLE_STYLES = {
