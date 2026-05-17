@@ -53,6 +53,10 @@ export default function Sidebar() {
   const visibleMore    = MORE_NAV.filter(i => hasRole(profile, i.minRole))
   const isMoreActive   = visibleMore.some(i => location.pathname === i.to)
 
+    console.log('ALL_NAV', ALL_NAV)
+  console.log('profile role', profile?.role)
+  console.log('visible nav', ALL_NAV.filter(i => hasRole(profile, i.minRole)))
+
   return (
     <>
       {/* ── DESKTOP SIDEBAR ─────────────────────────────────────────── */}
