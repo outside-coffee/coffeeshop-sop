@@ -79,25 +79,26 @@ function TabInventaire({ items, setItems, alerts }) {
   const filtered   = items.filter(i => activeCategory === 'all' || i.category === activeCategory)
 
   // ── Inventaire ──────────────────────────────────────────────────────
-  function adjustQty(id, delta) {
+  // delta = ajout ou retrait depuis 0
+  function adjustDelta(id, delta) {
     setEditQty(prev => {
-      const cur = prev[id] !== undefined ? prev[id] : items.find(i => i.id === id)?.current_qty || 0
+      const cur = prev[id] !== undefined ? prev[id] : 0
       return { ...prev, [id]: Math.max(0, parseFloat((cur + delta).toFixed(1))) }
     })
   }
 
-  function setQtyDirect(id, val) {
+  function setDeltaDirect(id, val) {
     setEditQty(prev => ({ ...prev, [id]: Math.max(0, parseFloat(val) || 0) }))
   }
 
   async function saveItem(item) {
-    const newQty = editQty[item.id]
-    if (newQty === undefined || newQty === item.current_qty) {
+    const delta = editQty[item.id]
+    if (delta === undefined || delta === 0) {
       setEditQty(prev => { const n = {...prev}; delete n[item.id]; return n })
       return
     }
     setSaving(item.id)
-    const delta = newQty - item.current_qty
+    const newQty = Math.max(0, item.current_qty + delta)
     await Promise.all([
       supabase.from('stock_items').update({ current_qty: newQty, updated_at: new Date().toISOString() }).eq('id', item.id),
       supabase.from('stock_movements').insert({ item_id: item.id, type: 'adjustment', qty: delta, note: 'Inventaire', done_by: profile?.id }),
@@ -166,8 +167,7 @@ function TabInventaire({ items, setItems, alerts }) {
       <div className="card">
         {filtered.map((item, idx) => {
           const st       = STATUS_CONFIG[getStatus(item)]
-          const edited   = editQty[item.id] !== undefined
-          const dispQty  = edited ? editQty[item.id] : item.current_qty
+          const edited   = editQty[item.id] !== undefined && editQty[item.id] !== 0
           const isSaving = saving === item.id
 
           return (
@@ -189,22 +189,35 @@ function TabInventaire({ items, setItems, alerts }) {
                   </div>
                 </div>
 
-                {/* CONTROLES QUANTITE */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0 }}>
+                {/* CONTROLES */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+
+                  {/* STOCK ACTUEL — lecture seule */}
+                  <div style={{ textAlign: 'right', minWidth: 52 }}>
+                    <div style={{ fontWeight: 800, fontSize: '1rem', color: st.color, lineHeight: 1 }}>
+                      {item.current_qty}
+                    </div>
+                    <div style={{ fontSize: '0.62rem', color: 'var(--muted)', fontWeight: 700 }}>{item.unit}</div>
+                  </div>
+
+                  {/* SEPARATEUR */}
+                  <div style={{ width: 1, height: 28, background: 'var(--outside-cream2)', flexShrink: 0 }} />
+
+                  {/* INCREMENT — part de 0 */}
                   <button className="btn btn-ghost btn-icon"
                     style={{ width: 30, height: 30, background: 'var(--outside-cream)', borderRadius: 'var(--radius-sm)' }}
-                    onClick={() => adjustQty(item.id, -1)}><Minus size={13} /></button>
+                    onClick={() => adjustDelta(item.id, -1)}><Minus size={13} /></button>
 
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px' }}>
-                    <input type="number" min="0" step="0.5" value={dispQty}
-                      onChange={e => setQtyDirect(item.id, e.target.value)}
-                      style={{ width: 52, textAlign: 'center', fontWeight: 800, fontSize: '0.95rem', border: `2px solid ${edited ? 'var(--outside-orange)' : 'var(--outside-cream2)'}`, borderRadius: 'var(--radius-sm)', padding: '3px 2px', fontFamily: 'var(--font-body)', background: edited ? '#FFF8F5' : 'white', color: 'var(--outside-dark)', outline: 'none' }} />
-                    <span style={{ fontSize: '0.65rem', color: 'var(--muted)', fontWeight: 700 }}>{item.unit}</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '1px' }}>
+                    <input type="number" min="0" step="0.5"
+                      value={edited ? editQty[item.id] : 0}
+                      onChange={e => setDeltaDirect(item.id, e.target.value)}
+                      style={{ width: 44, textAlign: 'center', fontWeight: 800, fontSize: '0.95rem', border: `2px solid ${edited ? 'var(--outside-orange)' : 'var(--outside-cream2)'}`, borderRadius: 'var(--radius-sm)', padding: '3px 2px', fontFamily: 'var(--font-body)', background: edited ? '#FFF8F5' : 'white', color: edited ? 'var(--outside-orange)' : 'var(--muted)', outline: 'none' }} />
                   </div>
 
                   <button className="btn btn-ghost btn-icon"
                     style={{ width: 30, height: 30, background: 'var(--outside-cream)', borderRadius: 'var(--radius-sm)' }}
-                    onClick={() => adjustQty(item.id, 1)}><Plus size={13} /></button>
+                    onClick={() => adjustDelta(item.id, 1)}><Plus size={13} /></button>
 
                   {/* SAVE */}
                   <button className="btn btn-icon"
