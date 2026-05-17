@@ -68,7 +68,6 @@ export default function Stock() {
 function TabInventaire({ items, setItems, alerts }) {
   const { profile } = useAuth()
   const [activeCategory, setActiveCategory] = useState('all')
-  const [editQty, setEditQty]       = useState({})
   const [saving, setSaving]         = useState(null)
   const [editSeuil, setEditSeuil]   = useState(null) // item en cours d'édition seuil
   const [seuilForm, setSeuilForm]   = useState({ min_qty: '', ideal_qty: '' })
@@ -79,34 +78,7 @@ function TabInventaire({ items, setItems, alerts }) {
   const filtered   = items.filter(i => activeCategory === 'all' || i.category === activeCategory)
 
   // ── Inventaire ──────────────────────────────────────────────────────
-  // delta = ajout ou retrait depuis 0
-  function adjustDelta(id, delta) {
-    setEditQty(prev => {
-      const cur = prev[id] !== undefined ? prev[id] : 0
-      return { ...prev, [id]: Math.max(0, parseFloat((cur + delta).toFixed(1))) }
-    })
-  }
 
-  function setDeltaDirect(id, val) {
-    setEditQty(prev => ({ ...prev, [id]: Math.max(0, parseFloat(val) || 0) }))
-  }
-
-  async function saveItem(item) {
-    const delta = editQty[item.id]
-    if (delta === undefined || delta === 0) {
-      setEditQty(prev => { const n = {...prev}; delete n[item.id]; return n })
-      return
-    }
-    setSaving(item.id)
-    const newQty = Math.max(0, item.current_qty + delta)
-    await Promise.all([
-      supabase.from('stock_items').update({ current_qty: newQty, updated_at: new Date().toISOString() }).eq('id', item.id),
-      supabase.from('stock_movements').insert({ item_id: item.id, type: 'adjustment', qty: delta, note: 'Inventaire', done_by: profile?.id }),
-    ])
-    setItems(prev => prev.map(i => i.id === item.id ? { ...i, current_qty: newQty } : i))
-    setEditQty(prev => { const n = {...prev}; delete n[item.id]; return n })
-    setSaving(null)
-  }
 
   // ── Seuils ──────────────────────────────────────────────────────────
   function openSeuil(item) {
@@ -148,7 +120,7 @@ function TabInventaire({ items, setItems, alerts }) {
       )}
 
       {/* CATEGORIES */}
-      <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', marginBottom: '1rem', scrollbarWidth: 'none' }}>
+      <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', marginBottom: '1rem', scrollbarWidth: 'none', marginLeft: '-1rem', marginRight: '-1rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
         {categories.map(cat => {
           const cnt      = cat === 'all' ? items.length : items.filter(i => i.category === cat).length
           const hasAlert = cat !== 'all' && items.filter(i => i.category === cat).some(i => getStatus(i) !== 'ok')
@@ -331,6 +303,7 @@ function TabMouvement({ items, setItems }) {
   const [movItem, setMovItem] = useState(null)
   const [search, setSearch]   = useState('')
   const [movQty, setMovQty]   = useState('')
+  const [movPrix, setMovPrix] = useState('')
   const [movNote, setMovNote] = useState('')
   const [saving, setSaving]   = useState(false)
   const [done, setDone]       = useState(false)
@@ -344,9 +317,13 @@ function TabMouvement({ items, setItems }) {
     const qty    = parseFloat(movQty)
     const delta  = movType === 'reception' ? qty : -qty
     const newQty = Math.max(0, movItem.current_qty + delta)
+    const noteText = [
+      movNote || null,
+      movType === 'reception' && movPrix ? `Prix: ${movPrix} DT` : null
+    ].filter(Boolean).join(' | ') || null
     await Promise.all([
       supabase.from('stock_items').update({ current_qty: newQty, updated_at: new Date().toISOString() }).eq('id', movItem.id),
-      supabase.from('stock_movements').insert({ item_id: movItem.id, type: movType, qty: delta, note: movNote || null, done_by: profile?.id }),
+      supabase.from('stock_movements').insert({ item_id: movItem.id, type: movType, qty: delta, note: noteText, done_by: profile?.id }),
     ])
     setItems(prev => prev.map(i => i.id === movItem.id ? { ...i, current_qty: newQty } : i))
     setSaving(false)
@@ -355,7 +332,7 @@ function TabMouvement({ items, setItems }) {
 
   function reset() {
     setStep(1); setMovType(null); setMovItem(null)
-    setSearch(''); setMovQty(''); setMovNote(''); setDone(false)
+    setSearch(''); setMovQty(''); setMovPrix(''); setMovNote(''); setDone(false)
   }
 
   // ÉTAPE 1 — TYPE
@@ -478,6 +455,14 @@ function TabMouvement({ items, setItems }) {
               placeholder={movType === 'reception' ? 'ex: Livraison Metro' : 'ex: Service matin'}
               value={movNote} onChange={e => setMovNote(e.target.value)} />
           </div>
+          {movType === 'reception' && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <label className="form-label">Prix d'achat (DT) — optionnel</label>
+              <input className="form-input" type="number" min="0" step="0.01"
+                placeholder="ex: 12.500"
+                value={movPrix} onChange={e => setMovPrix(e.target.value)} />
+            </div>
+          )}
         </div>
 
         <button className="btn btn-primary btn-lg" style={{ width: '100%', justifyContent: 'center' }}
