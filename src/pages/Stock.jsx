@@ -1,227 +1,235 @@
 import { useState, useEffect } from 'react'
-import { Plus, Edit2, TrendingUp, TrendingDown, Save, Search } from 'lucide-react'
+import { Plus, Minus, Check } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
-import { Spinner, Badge, Modal } from '../components/UI'
+import { Spinner } from '../components/UI'
+import { format } from 'date-fns'
+import { fr } from 'date-fns/locale'
 
 export default function Stock() {
   const { profile } = useAuth()
-  const [items, setItems]               = useState([])
-  const [loading, setLoading]           = useState(true)
+  const [items, setItems]           = useState([])
+  const [loading, setLoading]       = useState(true)
+  const [saving, setSaving]         = useState(null) // id de l'item en cours de save
   const [activeCategory, setActiveCategory] = useState('all')
-  const [search, setSearch]             = useState('')
-  const [editItem, setEditItem]         = useState(null)
-  const [movementItem, setMovementItem] = useState(null)
-  const [addModal, setAddModal]         = useState(false)
-  const [saving, setSaving]             = useState(false)
+  const [editQty, setEditQty]       = useState({}) // { id: newQty }
 
   useEffect(() => { fetchItems() }, [])
 
   async function fetchItems() {
-    const { data } = await supabase.from('stock_items').select('*').eq('active', true).order('category').order('name')
+    const { data } = await supabase
+      .from('stock_items').select('*').eq('active', true)
+      .order('category').order('name')
     setItems(data || [])
     setLoading(false)
   }
 
   const getStatus = i => {
     if (i.current_qty <= i.min_qty * 0.5) return 'critical'
-    if (i.current_qty <= i.min_qty) return 'low'
+    if (i.current_qty <= i.min_qty)       return 'low'
     return 'ok'
   }
-  const getPct = i => i.ideal_qty === 0 ? 100 : Math.min(100, Math.round((i.current_qty / i.ideal_qty) * 100))
 
-  const categories = ['all', ...Array.from(new Set(items.map(i => i.category))).sort()]
-  const filtered   = items
-    .filter(i => activeCategory === 'all' || i.category === activeCategory)
-    .filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()))
-  const lowCount   = items.filter(i => getStatus(i) !== 'ok').length
+  const STATUS_CONFIG = {
+    ok:       { label: 'OK',       bg: '#E0F2EB', color: '#1A5C4A', dot: '#1A5C4A' },
+    low:      { label: 'Bas',      bg: '#FEF3DC', color: '#8A5200', dot: '#D4892A' },
+    critical: { label: 'Critique', bg: '#FDEEEC', color: '#8B2A1E', dot: '#B03A1A' },
+  }
 
-  async function saveMovement({ item, type, qty, note }) {
-    setSaving(true)
-    const newQty = type === 'reception' ? item.current_qty + qty : Math.max(0, item.current_qty + qty)
+  const categories  = ['all', ...Array.from(new Set(items.map(i => i.category))).sort()]
+  const filtered    = items.filter(i => activeCategory === 'all' || i.category === activeCategory)
+  const alerts      = items.filter(i => getStatus(i) !== 'ok')
+
+  // Ajuste la quantité en mémoire
+  function adjustQty(id, delta) {
+    setEditQty(prev => {
+      const current = prev[id] !== undefined
+        ? prev[id]
+        : items.find(i => i.id === id)?.current_qty || 0
+      return { ...prev, [id]: Math.max(0, parseFloat((current + delta).toFixed(1))) }
+    })
+  }
+
+  function setQtyDirect(id, val) {
+    setEditQty(prev => ({ ...prev, [id]: Math.max(0, parseFloat(val) || 0) }))
+  }
+
+  // Sauvegarde une mise à jour
+  async function saveItem(item) {
+    const newQty = editQty[item.id]
+    if (newQty === undefined || newQty === item.current_qty) {
+      setEditQty(prev => { const n = {...prev}; delete n[item.id]; return n })
+      return
+    }
+    setSaving(item.id)
+    const delta = newQty - item.current_qty
     await Promise.all([
-      supabase.from('stock_movements').insert({ item_id: item.id, type, qty, note: note || null, done_by: profile?.id }),
-      supabase.from('stock_items').update({ current_qty: newQty, updated_at: new Date().toISOString() }).eq('id', item.id)
+      supabase.from('stock_items').update({ current_qty: newQty, updated_at: new Date().toISOString() }).eq('id', item.id),
+      supabase.from('stock_movements').insert({ item_id: item.id, type: 'adjustment', qty: delta, note: 'Mise a jour stock', done_by: profile?.id }),
     ])
-    await fetchItems()
-    setSaving(false)
-    setMovementItem(null)
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, current_qty: newQty } : i))
+    setEditQty(prev => { const n = {...prev}; delete n[item.id]; return n })
+    setSaving(null)
   }
 
-  async function saveItem(data) {
-    setSaving(true)
-    if (data.id) await supabase.from('stock_items').update(data).eq('id', data.id)
-    else await supabase.from('stock_items').insert(data)
-    await fetchItems()
-    setSaving(false)
-    setEditItem(null)
-    setAddModal(false)
-  }
-
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}><Spinner size={32} /></div>
+  if (loading) return (
+    <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}>
+      <Spinner size={32} />
+    </div>
+  )
 
   return (
     <>
       <div className="page-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <h1 className="page-title">Stock</h1>
-            <p className="page-subtitle">{items.length} produits{lowCount > 0 ? ` · ${lowCount} alerte(s)` : ' · Tout OK'}</p>
+            <p className="page-subtitle">
+              {format(new Date(), "EEE d MMM", { locale: fr })}
+              {alerts.length > 0
+                ? ` · ⚠️ ${alerts.length} alerte${alerts.length > 1 ? 's' : ''}`
+                : ' · Tout OK'}
+            </p>
           </div>
-          <button className="btn btn-primary btn-sm" onClick={() => setAddModal(true)}>
-            <Plus size={14} /> Ajouter
-          </button>
         </div>
       </div>
 
       <div className="page-content">
 
-        {/* SEARCH */}
-        <div style={{ position: 'relative', marginBottom: '0.75rem' }}>
-          <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
-          <input className="form-input" style={{ paddingLeft: '36px' }} placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
+        {/* ALERTES EN HAUT */}
+        {alerts.length > 0 && (
+          <div style={{ marginBottom: '1rem' }}>
+            {alerts.map(item => {
+              const st = STATUS_CONFIG[getStatus(item)]
+              return (
+                <div key={item.id} style={{
+                  background: st.bg, borderRadius: 'var(--radius-md)',
+                  padding: '8px 12px', marginBottom: '6px',
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  fontSize: '0.875rem'
+                }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: st.dot, flexShrink: 0 }} />
+                  <span style={{ fontWeight: 700, color: st.color, flex: 1 }}>{item.name}</span>
+                  <span style={{ fontWeight: 800, color: st.color }}>{item.current_qty} {item.unit}</span>
+                  <span style={{ fontSize: '0.7rem', color: st.color, opacity: 0.7 }}>min: {item.min_qty}</span>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
-        {/* CATEGORY FILTER — scroll horizontal */}
+        {/* FILTRE CATEGORIES */}
         <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', marginBottom: '1rem', scrollbarWidth: 'none' }}>
           {categories.map(cat => {
-            const cnt = cat === 'all' ? items.length : items.filter(i => i.category === cat).length
+            const cnt     = cat === 'all' ? items.length : items.filter(i => i.category === cat).length
+            const hasAlert = cat !== 'all' && items.filter(i => i.category === cat).some(i => getStatus(i) !== 'ok')
             return (
               <button key={cat}
                 className={`btn btn-sm ${activeCategory === cat ? 'btn-primary' : 'btn-outline'}`}
                 onClick={() => setActiveCategory(cat)}
                 style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
-                {cat === 'all' ? 'Tout' : cat} ({cnt})
+                {hasAlert && '⚠️ '}
+                {cat === 'all' ? 'Tout' : cat}
+                <span style={{ opacity: 0.65 }}> ({cnt})</span>
               </button>
             )
           })}
         </div>
 
-        {/* ITEMS LIST — cards sur mobile */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {filtered.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--muted)' }}>Aucun produit</div>
-          )}
-          {filtered.map(item => {
-            const status = getStatus(item)
-            const pct    = getPct(item)
+        {/* LISTE ITEMS */}
+        <div className="card">
+          {filtered.map((item, idx) => {
+            const status  = getStatus(item)
+            const st      = STATUS_CONFIG[status]
+            const edited  = editQty[item.id] !== undefined
+            const dispQty = edited ? editQty[item.id] : item.current_qty
+            const isSaving = saving === item.id
+
             return (
-              <div key={item.id} className="card" style={{ padding: '0.9rem 1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                      <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{item.name}</span>
-                      {status === 'ok'       && <Badge color="green">OK</Badge>}
-                      {status === 'low'      && <Badge color="amber">Bas</Badge>}
-                      {status === 'critical' && <Badge color="red">Critique</Badge>}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '6px' }}>
-                      {item.category} · min: {item.min_qty} {item.unit}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div className="stock-bar" style={{ flex: 1 }}>
-                        <div className={`stock-fill ${status}`} style={{ width: `${pct}%` }} />
-                      </div>
-                      <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--outside-dark)', flexShrink: 0 }}>
-                        {item.current_qty} {item.unit}
-                      </span>
-                    </div>
+              <div key={item.id} style={{
+                padding: '0.85rem 1rem',
+                borderBottom: idx < filtered.length - 1 ? '1.5px solid var(--outside-cream)' : 'none',
+                display: 'flex', alignItems: 'center', gap: '10px'
+              }}>
+                {/* STATUS DOT */}
+                <div style={{ width: 9, height: 9, borderRadius: '50%', background: st.dot, flexShrink: 0 }} />
+
+                {/* NOM */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {item.name}
                   </div>
-                  <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                    <button className="btn btn-ghost btn-icon" onClick={() => setMovementItem({ item, mode: 'reception' })} title="Reception">
-                      <TrendingUp size={17} color="var(--outside-green)" />
-                    </button>
-                    <button className="btn btn-ghost btn-icon" onClick={() => setMovementItem({ item, mode: 'adjustment' })} title="Ajustement">
-                      <TrendingDown size={17} color="var(--outside-amber)" />
-                    </button>
-                    <button className="btn btn-ghost btn-icon" onClick={() => setEditItem(item)} title="Modifier">
-                      <Edit2 size={15} color="var(--muted)" />
-                    </button>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: '1px' }}>
+                    min {item.min_qty} {item.unit}
                   </div>
+                </div>
+
+                {/* CONTROLES */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                  <button
+                    className="btn btn-ghost btn-icon"
+                    style={{ width: 32, height: 32, background: 'var(--outside-cream)', borderRadius: 'var(--radius-sm)' }}
+                    onClick={() => adjustQty(item.id, -1)}>
+                    <Minus size={14} />
+                  </button>
+
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px' }}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={dispQty}
+                      onChange={e => setQtyDirect(item.id, e.target.value)}
+                      style={{
+                        width: 56,
+                        textAlign: 'center',
+                        fontWeight: 800,
+                        fontSize: '1rem',
+                        border: edited ? '2px solid var(--outside-orange)' : '2px solid var(--outside-cream2)',
+                        borderRadius: 'var(--radius-sm)',
+                        padding: '4px 2px',
+                        fontFamily: 'var(--font-body)',
+                        background: edited ? '#FFF8F5' : 'white',
+                        color: 'var(--outside-dark)',
+                        outline: 'none',
+                      }}
+                    />
+                    <span style={{ fontSize: '0.7rem', color: 'var(--muted)', fontWeight: 700 }}>{item.unit}</span>
+                  </div>
+
+                  <button
+                    className="btn btn-ghost btn-icon"
+                    style={{ width: 32, height: 32, background: 'var(--outside-cream)', borderRadius: 'var(--radius-sm)' }}
+                    onClick={() => adjustQty(item.id, 1)}>
+                    <Plus size={14} />
+                  </button>
+
+                  {/* SAVE */}
+                  <button
+                    className="btn btn-icon"
+                    style={{
+                      width: 32, height: 32,
+                      background: edited ? 'var(--outside-green)' : 'transparent',
+                      borderRadius: 'var(--radius-sm)',
+                      border: edited ? 'none' : '2px solid transparent',
+                      opacity: edited ? 1 : 0,
+                      pointerEvents: edited ? 'auto' : 'none',
+                      transition: 'all 0.15s',
+                    }}
+                    onClick={() => saveItem(item)}
+                    disabled={isSaving}>
+                    {isSaving ? <Spinner size={14} /> : <Check size={14} color="white" />}
+                  </button>
                 </div>
               </div>
             )
           })}
         </div>
-      </div>
 
-      {movementItem && (
-        <MovementModal item={movementItem.item} mode={movementItem.mode}
-          onClose={() => setMovementItem(null)} onSave={saveMovement} saving={saving} />
-      )}
-      {(editItem || addModal) && (
-        <ItemModal item={editItem} categories={categories.filter(c => c !== 'all')}
-          onClose={() => { setEditItem(null); setAddModal(false) }} onSave={saveItem} saving={saving} />
-      )}
+        <p style={{ fontSize: '0.75rem', color: 'var(--muted)', textAlign: 'center', marginTop: '1rem', fontWeight: 600 }}>
+          Modifie la quantite puis appuie sur ✓ pour sauvegarder
+        </p>
+      </div>
     </>
-  )
-}
-
-function MovementModal({ item, mode, onClose, onSave, saving }) {
-  const [qty, setQty]   = useState('')
-  const [note, setNote] = useState('')
-  return (
-    <Modal open onClose={onClose}
-      title={mode === 'reception' ? `Reception — ${item.name}` : `Ajustement — ${item.name}`}
-      footer={<>
-        <button className="btn btn-outline" onClick={onClose}>Annuler</button>
-        <button className="btn btn-primary" disabled={!qty || saving}
-          onClick={() => onSave({ item, type: mode, qty: mode === 'reception' ? +qty : -Math.abs(+qty), note })}>
-          {saving ? <Spinner size={16} /> : <Save size={15} />} Enregistrer
-        </button>
-      </>}>
-      <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginBottom: '1rem' }}>
-        Stock actuel: <strong style={{ color: 'var(--ink)' }}>{item.current_qty} {item.unit}</strong>
-      </div>
-      <div className="form-group">
-        <label className="form-label">Quantite ({item.unit})</label>
-        <input className="form-input" type="number" min="0" step="0.1" value={qty} onChange={e => setQty(e.target.value)} autoFocus placeholder="ex: 500" />
-      </div>
-      <div className="form-group">
-        <label className="form-label">Note (optionnel)</label>
-        <input className="form-input" type="text" value={note} onChange={e => setNote(e.target.value)} placeholder="ex: livraison fournisseur" />
-      </div>
-    </Modal>
-  )
-}
-
-function ItemModal({ item, categories, onClose, onSave, saving }) {
-  const [form, setForm] = useState(item || { name: '', category: categories[0] || '', unit: 'g', current_qty: 0, min_qty: 0, ideal_qty: 0 })
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
-  return (
-    <Modal open onClose={onClose} title={item ? 'Modifier' : 'Nouveau produit'}
-      footer={<>
-        <button className="btn btn-outline" onClick={onClose}>Annuler</button>
-        <button className="btn btn-primary" disabled={!form.name || saving} onClick={() => onSave(form)}>
-          {saving ? <Spinner size={16} /> : <Save size={15} />} Enregistrer
-        </button>
-      </>}>
-      <div className="form-group">
-        <label className="form-label">Nom</label>
-        <input className="form-input" value={form.name} onChange={e => set('name', e.target.value)} autoFocus />
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-        <div className="form-group">
-          <label className="form-label">Categorie</label>
-          <select className="form-select" value={form.category} onChange={e => set('category', e.target.value)}>
-            {categories.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <div className="form-group">
-          <label className="form-label">Unite</label>
-          <select className="form-select" value={form.unit} onChange={e => set('unit', e.target.value)}>
-            {['g','kg','ml','L','unite','Feuilles','bouteille'].map(u => <option key={u}>{u}</option>)}
-          </select>
-        </div>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '0.75rem' }}>
-        {[['current_qty','Actuel'],['min_qty','Minimum'],['ideal_qty','Ideal']].map(([k,l]) => (
-          <div className="form-group" key={k} style={{ marginBottom: 0 }}>
-            <label className="form-label">{l}</label>
-            <input className="form-input" type="number" step="0.1" min="0" value={form[k]} onChange={e => set(k, parseFloat(e.target.value) || 0)} />
-          </div>
-        ))}
-      </div>
-    </Modal>
   )
 }
