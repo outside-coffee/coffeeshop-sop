@@ -19,6 +19,7 @@ const MORE_NAV = [
   { to: '/recettes',  icon: BookOpen, label: 'Recettes',      minRole: 'barista' },
   { to: '/standards', icon: Star,     label: 'Standards',     minRole: 'barista' },
   { to: '/equipe',    icon: Users,    label: 'Equipe',        minRole: 'manager' },
+  { to: '/ecarts',    icon: TrendingUp, label: 'Ecarts',       minRole: 'manager' },
 ]
 
 const ALL_NAV = [

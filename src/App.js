@@ -11,6 +11,7 @@ import Stock from './pages/Stock'
 import Recipes from './pages/Recipes'
 import Standards from './pages/Standards'
 import Team from './pages/Team'
+import Ecarts from './pages/Ecarts'
 import { Spinner } from './components/UI'
 
 function ProtectedLayout() {
@@ -37,6 +38,7 @@ function ProtectedLayout() {
           <Route path="/recettes" element={<Recipes />} />
           <Route path="/standards" element={<Standards />} />
           <Route path="/equipe" element={<Team />} />
+          <Route path="/ecarts" element={<Ecarts />} />
         </Routes>
       </main>
       <ToastContainer />
