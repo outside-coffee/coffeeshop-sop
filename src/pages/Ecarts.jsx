@@ -39,13 +39,24 @@ export default function Ecarts() {
   async function chargerMatieres() {
     setLoading(true)
 
-    // 1. Ventes hors conso perso
-    const { data: ventes } = await supabase
-      .from('transaction_line')
-      .select('produit, qte')
-      .gte('date_vente', dateFrom)
-      .lte('date_vente', dateTo)
-      .neq('numtable', 32)
+    // 1. Ventes hors conso perso — agrégées côté Supabase pour éviter la limite 1000 lignes
+    // On récupère par pages de 1000 et on accumule
+    let ventes = []
+    let page = 0
+    const pageSize = 1000
+    while (true) {
+      const { data: batch } = await supabase
+        .from('transaction_line')
+        .select('produit, qte')
+        .gte('date_vente', dateFrom)
+        .lte('date_vente', dateTo)
+        .neq('numtable', 32)
+        .range(page * pageSize, (page + 1) * pageSize - 1)
+      if (!batch || batch.length === 0) break
+      ventes = ventes.concat(batch)
+      if (batch.length < pageSize) break
+      page++
+    }
 
     // 2. Composition TOUS types (produit fini + base + foam)
     const { data: compoAll } = await supabase
@@ -81,19 +92,29 @@ export default function Ecarts() {
       venteMap[v.produit] = (venteMap[v.produit] || 0) + v.qte
     }
 
+    // Helper normalisation
+    const normalizeStr = s => s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+
     // Calcul conso théorique par matière finale
     // en décomposant les bases dans les produits
     const consoMap = {}
 
+    // Build a trimmed venteMap for robust matching
+    const venteMapTrimmed = {}
+    for (const [k, v] of Object.entries(venteMap)) {
+      venteMapTrimmed[k.trim().toUpperCase()] = (venteMapTrimmed[k.trim().toUpperCase()] || 0) + v
+    }
+
     for (const c of compoProduit) {
-      const qteProd = venteMap[c.nom_produit] || 0
+      const keyNorm = c.nom_produit.trim().toUpperCase()
+      const qteProd = venteMapTrimmed[keyNorm] || 0
       if (qteProd === 0) continue
 
       const nomMatiere = c.matiere.toUpperCase().trim()
 
       // Si c'est une base → décomposer (matching insensible casse + accents)
-      const normalizeBase = s => s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-      const baseKey = Object.keys(baseMap).find(k => normalizeBase(k) === normalizeBase(nomMatiere))
+      // normalizeBase définie hors boucle pour performance
+      const baseKey = Object.keys(baseMap).find(k => normalizeStr(k) === normalizeStr(nomMatiere))
       if (baseKey) {
         const baseMap2 = baseMap // alias pour closure
         const baseIngredients = baseMap[baseKey]
