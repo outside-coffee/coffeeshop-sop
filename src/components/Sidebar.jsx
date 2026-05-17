@@ -2,7 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 import {
   BarChart2, CheckSquare, Coffee, Package,
-  BookOpen, Star, Users, LogOut, MoreHorizontal, X, Shield
+  BookOpen, Star, Users, LogOut, MoreHorizontal, X, Shield, TrendingUp
 } from 'lucide-react'
 import { useAuth, hasRole } from '../hooks/useAuth'
 import { Avatar } from './UI'
