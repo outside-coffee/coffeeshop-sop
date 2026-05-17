@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Minus, Check, TrendingUp, TrendingDown, ClipboardList, Search, ChevronRight, Settings, X } from 'lucide-react'
+import { Check, TrendingUp, TrendingDown, ClipboardList, Search, ChevronRight, Settings, X, Plus, Minus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth, hasRole } from '../hooks/useAuth'
 import { Spinner } from '../components/UI'
@@ -48,12 +48,10 @@ export default function Stock() {
       <div className="page-content">
         <div className="tabs" style={{ marginBottom: '1.25rem' }}>
           <button className={`tab-btn${tab === 'inventaire' ? ' active' : ''}`} onClick={() => setTab('inventaire')}>
-            <ClipboardList size={14} style={{ display: 'inline', marginRight: 5 }} />
-            Inventaire
+            <ClipboardList size={14} style={{ display: 'inline', marginRight: 5 }} />Inventaire
           </button>
           <button className={`tab-btn${tab === 'mouvement' ? ' active' : ''}`} onClick={() => setTab('mouvement')}>
-            <TrendingUp size={14} style={{ display: 'inline', marginRight: 5 }} />
-            Mouvement
+            <TrendingUp size={14} style={{ display: 'inline', marginRight: 5 }} />Mouvement
           </button>
         </div>
 
@@ -64,23 +62,18 @@ export default function Stock() {
   )
 }
 
-// ── ONGLET INVENTAIRE ─────────────────────────────────────────────────────
+// ── INVENTAIRE — lecture seule + seuils ───────────────────────────────────
 function TabInventaire({ items, setItems, alerts }) {
-  const { profile } = useAuth()
+  const { profile }   = useAuth()
   const [activeCategory, setActiveCategory] = useState('all')
-  const [saving, setSaving]         = useState(null)
-  const [editSeuil, setEditSeuil]   = useState(null) // item en cours d'édition seuil
+  const [editSeuil, setEditSeuil]   = useState(null)
   const [seuilForm, setSeuilForm]   = useState({ min_qty: '', ideal_qty: '' })
   const [seuilSaving, setSeuilSaving] = useState(false)
 
-  const isManager = hasRole(profile, 'manager')
+  const isManager  = hasRole(profile, 'manager')
   const categories = ['all', ...Array.from(new Set(items.map(i => i.category))).sort()]
   const filtered   = items.filter(i => activeCategory === 'all' || i.category === activeCategory)
 
-  // ── Inventaire ──────────────────────────────────────────────────────
-
-
-  // ── Seuils ──────────────────────────────────────────────────────────
   function openSeuil(item) {
     setEditSeuil(item)
     setSeuilForm({ min_qty: item.min_qty, ideal_qty: item.ideal_qty })
@@ -90,8 +83,8 @@ function TabInventaire({ items, setItems, alerts }) {
     if (!editSeuil) return
     setSeuilSaving(true)
     const update = {
-      min_qty:   parseFloat(seuilForm.min_qty)   || 0,
-      ideal_qty: parseFloat(seuilForm.ideal_qty) || 0,
+      min_qty:    parseFloat(seuilForm.min_qty)   || 0,
+      ideal_qty:  parseFloat(seuilForm.ideal_qty) || 0,
       updated_at: new Date().toISOString(),
     }
     await supabase.from('stock_items').update(update).eq('id', editSeuil.id)
@@ -135,96 +128,54 @@ function TabInventaire({ items, setItems, alerts }) {
         })}
       </div>
 
-      {/* LISTE */}
+      {/* LISTE — lecture seule */}
       <div className="card">
         {filtered.map((item, idx) => {
-          const st       = STATUS_CONFIG[getStatus(item)]
-          const edited   = editQty[item.id] !== undefined && editQty[item.id] !== 0
-          const isSaving = saving === item.id
-
+          const st = STATUS_CONFIG[getStatus(item)]
           return (
-            <div key={item.id} style={{
-              borderBottom: idx < filtered.length - 1 ? '1.5px solid var(--outside-cream)' : 'none',
-            }}>
-              {/* LIGNE PRINCIPALE */}
-              <div style={{ padding: '0.85rem 1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: st.dot, flexShrink: 0 }} />
+            <div key={item.id} style={{ padding: '0.85rem 1rem', borderBottom: idx < filtered.length - 1 ? '1.5px solid var(--outside-cream)' : 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
 
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {item.name}
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: 'var(--muted)', marginTop: '1px' }}>
-                    min <span style={{ fontWeight: 800, color: getStatus(item) !== 'ok' ? st.color : 'var(--muted)' }}>{item.min_qty}</span>
-                    {item.ideal_qty > 0 && <> · idéal {item.ideal_qty}</>}
-                    <span style={{ color: 'var(--muted)' }}> {item.unit}</span>
-                  </div>
+              {/* DOT */}
+              <div style={{ width: 9, height: 9, borderRadius: '50%', background: st.dot, flexShrink: 0 }} />
+
+              {/* NOM + SEUILS */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {item.name}
                 </div>
-
-                {/* CONTROLES */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
-
-                  {/* STOCK ACTUEL — lecture seule */}
-                  <div style={{ textAlign: 'right', minWidth: 52 }}>
-                    <div style={{ fontWeight: 800, fontSize: '1rem', color: st.color, lineHeight: 1 }}>
-                      {item.current_qty}
-                    </div>
-                    <div style={{ fontSize: '0.62rem', color: 'var(--muted)', fontWeight: 700 }}>{item.unit}</div>
-                  </div>
-
-                  {/* SEPARATEUR */}
-                  <div style={{ width: 1, height: 28, background: 'var(--outside-cream2)', flexShrink: 0 }} />
-
-                  {/* INCREMENT — part de 0 */}
-                  <button className="btn btn-ghost btn-icon"
-                    style={{ width: 30, height: 30, background: 'var(--outside-cream)', borderRadius: 'var(--radius-sm)' }}
-                    onClick={() => adjustDelta(item.id, -1)}><Minus size={13} /></button>
-
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '1px' }}>
-                    <input type="number" min="0" step="0.5"
-                      value={edited ? editQty[item.id] : 0}
-                      onChange={e => setDeltaDirect(item.id, e.target.value)}
-                      style={{ width: 44, textAlign: 'center', fontWeight: 800, fontSize: '0.95rem', border: `2px solid ${edited ? 'var(--outside-orange)' : 'var(--outside-cream2)'}`, borderRadius: 'var(--radius-sm)', padding: '3px 2px', fontFamily: 'var(--font-body)', background: edited ? '#FFF8F5' : 'white', color: edited ? 'var(--outside-orange)' : 'var(--muted)', outline: 'none' }} />
-                  </div>
-
-                  <button className="btn btn-ghost btn-icon"
-                    style={{ width: 30, height: 30, background: 'var(--outside-cream)', borderRadius: 'var(--radius-sm)' }}
-                    onClick={() => adjustDelta(item.id, 1)}><Plus size={13} /></button>
-
-                  {/* SAVE */}
-                  <button className="btn btn-icon"
-                    style={{ width: 30, height: 30, background: edited ? 'var(--outside-green)' : 'transparent', borderRadius: 'var(--radius-sm)', border: 'none', opacity: edited ? 1 : 0, pointerEvents: edited ? 'auto' : 'none', transition: 'all 0.15s' }}
-                    onClick={() => saveItem(item)} disabled={isSaving}>
-                    {isSaving ? <Spinner size={13} /> : <Check size={13} color="white" />}
-                  </button>
-
-                  {/* SEUILS — manager only */}
-                  {isManager && (
-                    <button className="btn btn-ghost btn-icon"
-                      style={{ width: 28, height: 28, borderRadius: 'var(--radius-sm)', color: 'var(--muted)', opacity: 0.6 }}
-                      onClick={() => openSeuil(item)} title="Modifier les seuils">
-                      <Settings size={13} />
-                    </button>
-                  )}
+                <div style={{ fontSize: '0.68rem', color: 'var(--muted)', marginTop: '1px' }}>
+                  min <span style={{ fontWeight: 800 }}>{item.min_qty}</span>
+                  {item.ideal_qty > 0 && <> · idéal <span style={{ fontWeight: 800 }}>{item.ideal_qty}</span></>}
+                  {' '}{item.unit}
                 </div>
               </div>
 
+              {/* STOCK ACTUEL */}
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: '1.1rem', color: st.color, lineHeight: 1 }}>
+                  {item.current_qty}
+                </div>
+                <div style={{ fontSize: '0.62rem', color: 'var(--muted)', fontWeight: 700 }}>{item.unit}</div>
+              </div>
 
+              {/* SEUILS — manager only */}
+              {isManager && (
+                <button className="btn btn-ghost btn-icon"
+                  style={{ width: 30, height: 30, borderRadius: 'var(--radius-sm)', color: 'var(--muted)', flexShrink: 0 }}
+                  onClick={() => openSeuil(item)}>
+                  <Settings size={14} />
+                </button>
+              )}
             </div>
           )
         })}
       </div>
-
-      <p style={{ fontSize: '0.72rem', color: 'var(--muted)', textAlign: 'center', marginTop: '0.75rem', fontWeight: 600 }}>
-        Modifie la quantite puis ✓ pour sauvegarder
-      </p>
 
       {/* MODAL SEUILS */}
       {editSeuil && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(29,58,58,0.55)', zIndex: 1000, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(3px)' }}
           onClick={e => e.target === e.currentTarget && setEditSeuil(null)}>
           <div style={{ background: 'white', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', width: '100%', maxWidth: 560, padding: '1.5rem 1.25rem', boxShadow: 'var(--shadow-lg)' }}>
-
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <div>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem' }}>Seuils d'alerte</div>
@@ -232,61 +183,27 @@ function TabInventaire({ items, setItems, alerts }) {
               </div>
               <button className="btn btn-ghost btn-icon" onClick={() => setEditSeuil(null)}><X size={18} /></button>
             </div>
-
-            {/* STOCK ACTUEL */}
-            <div style={{ background: 'var(--outside-cream)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ background: 'var(--outside-cream)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '0.85rem', color: 'var(--muted)', fontWeight: 600 }}>Stock actuel</span>
-              <span style={{ fontWeight: 800, fontSize: '1rem', color: STATUS_CONFIG[getStatus(editSeuil)].color }}>
-                {editSeuil.current_qty} {editSeuil.unit}
-              </span>
+              <span style={{ fontWeight: 800, color: STATUS_CONFIG[getStatus(editSeuil)].color }}>{editSeuil.current_qty} {editSeuil.unit}</span>
             </div>
-
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.25rem' }}>
               <div>
-                <label className="form-label">
-                  Seuil minimum ({editSeuil.unit})
-                  <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 600, color: 'var(--outside-amber)', marginTop: '1px' }}>
-                    → Alerte "Bas"
-                  </span>
-                </label>
-                <input className="form-input" type="number" min="0" step="0.5"
-                  value={seuilForm.min_qty}
+                <label className="form-label">Seuil minimum ({editSeuil.unit})<span style={{ display: 'block', fontSize: '0.65rem', color: 'var(--outside-amber)', fontWeight: 600 }}>→ Alerte Bas</span></label>
+                <input className="form-input" type="number" min="0" step="0.5" value={seuilForm.min_qty}
                   onChange={e => setSeuilForm(p => ({ ...p, min_qty: e.target.value }))}
                   style={{ fontWeight: 800, textAlign: 'center', fontSize: '1.1rem' }} />
               </div>
               <div>
-                <label className="form-label">
-                  Stock idéal ({editSeuil.unit})
-                  <span style={{ fontSize: '0.65rem', display: 'block', fontWeight: 600, color: 'var(--outside-green)', marginTop: '1px' }}>
-                    → Barre de niveau
-                  </span>
-                </label>
-                <input className="form-input" type="number" min="0" step="0.5"
-                  value={seuilForm.ideal_qty}
+                <label className="form-label">Stock idéal ({editSeuil.unit})<span style={{ display: 'block', fontSize: '0.65rem', color: 'var(--outside-green)', fontWeight: 600 }}>→ Objectif</span></label>
+                <input className="form-input" type="number" min="0" step="0.5" value={seuilForm.ideal_qty}
                   onChange={e => setSeuilForm(p => ({ ...p, ideal_qty: e.target.value }))}
                   style={{ fontWeight: 800, textAlign: 'center', fontSize: '1.1rem' }} />
               </div>
             </div>
-
-            {/* PREVIEW */}
-            <div style={{ background: 'var(--outside-cream)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '1.25rem', fontSize: '0.82rem', color: 'var(--muted)' }}>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px' }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#B03A1A' }} />
-                <span>En dessous de <strong style={{ color: 'var(--ink)' }}>{parseFloat(seuilForm.min_qty || 0) * 0.5} {editSeuil.unit}</strong> → Critique</span>
-              </div>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center', marginBottom: '4px' }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#D4892A' }} />
-                <span>En dessous de <strong style={{ color: 'var(--ink)' }}>{seuilForm.min_qty || 0} {editSeuil.unit}</strong> → Bas</span>
-              </div>
-              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1A5C4A' }} />
-                <span>Au dessus → OK</span>
-              </div>
-            </div>
-
             <button className="btn btn-primary btn-lg" style={{ width: '100%', justifyContent: 'center' }}
               onClick={saveSeuil} disabled={seuilSaving}>
-              {seuilSaving ? <Spinner size={18} /> : <Check size={18} />} Enregistrer les seuils
+              {seuilSaving ? <Spinner size={18} /> : <Check size={18} />} Enregistrer
             </button>
           </div>
         </div>
@@ -295,15 +212,17 @@ function TabInventaire({ items, setItems, alerts }) {
   )
 }
 
-// ── ONGLET MOUVEMENT ──────────────────────────────────────────────────────
+// ── MOUVEMENT — 3 étapes ──────────────────────────────────────────────────
 function TabMouvement({ items, setItems }) {
   const { profile } = useAuth()
+  const isManager   = hasRole(profile, 'manager')
+
   const [step, setStep]       = useState(1)
   const [movType, setMovType] = useState(null)
   const [movItem, setMovItem] = useState(null)
   const [search, setSearch]   = useState('')
   const [movQty, setMovQty]   = useState('')
-  const [movPrix, setMovPrix] = useState('')
+  const [movPrice, setMovPrice] = useState('')
   const [movNote, setMovNote] = useState('')
   const [saving, setSaving]   = useState(false)
   const [done, setDone]       = useState(false)
@@ -317,13 +236,21 @@ function TabMouvement({ items, setItems }) {
     const qty    = parseFloat(movQty)
     const delta  = movType === 'reception' ? qty : -qty
     const newQty = Math.max(0, movItem.current_qty + delta)
-    const noteText = [
-      movNote || null,
-      movType === 'reception' && movPrix ? `Prix: ${movPrix} DT` : null
-    ].filter(Boolean).join(' | ') || null
+
+    const movement = {
+      item_id:  movItem.id,
+      type:     movType,
+      qty:      delta,
+      note:     movNote || null,
+      done_by:  profile?.id,
+    }
+    if (movType === 'reception' && movPrice) {
+      movement.note = [movNote, `Prix: ${movPrice} DT`].filter(Boolean).join(' — ')
+    }
+
     await Promise.all([
       supabase.from('stock_items').update({ current_qty: newQty, updated_at: new Date().toISOString() }).eq('id', movItem.id),
-      supabase.from('stock_movements').insert({ item_id: movItem.id, type: movType, qty: delta, note: noteText, done_by: profile?.id }),
+      supabase.from('stock_movements').insert(movement),
     ])
     setItems(prev => prev.map(i => i.id === movItem.id ? { ...i, current_qty: newQty } : i))
     setSaving(false)
@@ -332,7 +259,7 @@ function TabMouvement({ items, setItems }) {
 
   function reset() {
     setStep(1); setMovType(null); setMovItem(null)
-    setSearch(''); setMovQty(''); setMovPrix(''); setMovNote(''); setDone(false)
+    setSearch(''); setMovQty(''); setMovPrice(''); setMovNote(''); setDone(false)
   }
 
   // ÉTAPE 1 — TYPE
@@ -395,19 +322,22 @@ function TabMouvement({ items, setItems }) {
     </div>
   )
 
-  // ÉTAPE 3 — QUANTITE
+  // ÉTAPE 3 — QUANTITE + PRIX (reception) + NOTE
   if (step === 3) {
     const qty    = parseFloat(movQty) || 0
     const newQty = qty > 0 ? Math.max(0, movType === 'reception' ? movItem.current_qty + qty : movItem.current_qty - qty) : null
 
     if (done) return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem', gap: '1rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '3rem 1rem', gap: '1rem' }}>
         <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#E0F2EB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Check size={32} color="#1A5C4A" />
         </div>
         <div style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--outside-dark)' }}>Enregistre !</div>
         <div style={{ fontSize: '0.875rem', color: 'var(--muted)', textAlign: 'center' }}>
-          {movItem.name} : {newQty?.toFixed(1)} {movItem.unit}
+          {movItem.name} · nouveau stock : {newQty?.toFixed(1)} {movItem.unit}
+          {movType === 'reception' && movPrice && (
+            <div style={{ marginTop: '4px', fontWeight: 700, color: 'var(--outside-dark)' }}>Achat : {movPrice} DT</div>
+          )}
         </div>
         <button className="btn btn-primary" style={{ marginTop: '0.5rem' }} onClick={reset}>Nouveau mouvement</button>
       </div>
@@ -422,6 +352,7 @@ function TabMouvement({ items, setItems }) {
           </div>
         </div>
 
+        {/* PRODUIT */}
         <div className="card" style={{ padding: '1rem', marginBottom: '1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
@@ -434,14 +365,18 @@ function TabMouvement({ items, setItems }) {
           </div>
         </div>
 
+        {/* QUANTITE */}
         <div className="card" style={{ padding: '1rem', marginBottom: '1rem' }}>
-          <label className="form-label">Quantite {movType === 'reception' ? 'recue' : 'consommee'} ({movItem.unit})</label>
-          <input className="form-input" type="number" min="0" step="0.5" placeholder="ex: 500"
-            value={movQty} onChange={e => setMovQty(e.target.value)} autoFocus
-            style={{ fontSize: '1.2rem', fontWeight: 800, textAlign: 'center' }} />
+          <div className="form-group">
+            <label className="form-label">Quantite {movType === 'reception' ? 'recue' : 'consommee'} ({movItem.unit})</label>
+            <input className="form-input" type="number" min="0" step="0.5" placeholder="ex: 500"
+              value={movQty} onChange={e => setMovQty(e.target.value)} autoFocus
+              style={{ fontSize: '1.2rem', fontWeight: 800, textAlign: 'center' }} />
+          </div>
 
+          {/* PREVIEW */}
           {newQty !== null && (
-            <div style={{ marginTop: '0.75rem', padding: '10px 14px', background: movType === 'reception' ? '#E0F2EB' : '#FEF3DC', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '10px 14px', background: movType === 'reception' ? '#E0F2EB' : '#FEF3DC', borderRadius: 'var(--radius-md)', marginBottom: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--muted)' }}>Nouveau stock</span>
               <span style={{ fontSize: '1.1rem', fontWeight: 800, color: movType === 'reception' ? '#1A5C4A' : '#8A5200' }}>
                 {newQty.toFixed(1)} {movItem.unit}
@@ -449,27 +384,37 @@ function TabMouvement({ items, setItems }) {
             </div>
           )}
 
-          <div style={{ marginTop: '0.75rem' }}>
+          {/* PRIX D'ACHAT — réception + manager seulement */}
+          {movType === 'reception' && isManager && (
+            <div className="form-group">
+              <label className="form-label">
+                Prix d'achat (DT)
+                <span style={{ fontSize: '0.65rem', display: 'inline', fontWeight: 600, color: 'var(--muted)', marginLeft: '6px' }}>optionnel</span>
+              </label>
+              <div style={{ position: 'relative' }}>
+                <input className="form-input" type="number" min="0" step="0.1" placeholder="ex: 38.00"
+                  value={movPrice} onChange={e => setMovPrice(e.target.value)}
+                  style={{ paddingRight: '40px' }} />
+                <span style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', fontSize: '0.85rem', fontWeight: 700, color: 'var(--muted)' }}>DT</span>
+              </div>
+            </div>
+          )}
+
+          <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">Note (optionnel)</label>
             <input className="form-input" type="text"
               placeholder={movType === 'reception' ? 'ex: Livraison Metro' : 'ex: Service matin'}
               value={movNote} onChange={e => setMovNote(e.target.value)} />
           </div>
-          {movType === 'reception' && (
-            <div style={{ marginTop: '0.75rem' }}>
-              <label className="form-label">Prix d'achat (DT) — optionnel</label>
-              <input className="form-input" type="number" min="0" step="0.01"
-                placeholder="ex: 12.500"
-                value={movPrix} onChange={e => setMovPrix(e.target.value)} />
-            </div>
-          )}
         </div>
 
         <button className="btn btn-primary btn-lg" style={{ width: '100%', justifyContent: 'center' }}
           onClick={saveMouvement} disabled={!movQty || qty <= 0 || saving}>
-          {saving ? <Spinner size={18} /> : movType === 'reception'
-            ? <><TrendingUp size={18} /> Enregistrer la reception</>
-            : <><TrendingDown size={18} /> Enregistrer la consommation</>}
+          {saving ? <Spinner size={18} />
+            : movType === 'reception'
+              ? <><TrendingUp size={18} /> Enregistrer la reception</>
+              : <><TrendingDown size={18} /> Enregistrer la consommation</>
+          }
         </button>
       </div>
     )
