@@ -3,330 +3,214 @@ import { ChevronDown, ChevronUp } from 'lucide-react'
 
 const OUTSIDE_STANDARDS = {
   reception: {
-    title: 'Accueil & séquence de service',
+    title: 'Accueil & service',
     icon: '👋',
     steps: [
-      { step: 'Accueil (0–30 sec)', action: '« Marhba bik fi Outside !» + sourire + contact visuel' },
-      { step: 'Installation', action: 'Proposer une table ou laisser choisir — présenter les zones' },
-      { step: 'Commande (max 2 min)', action: '« Chno theb tichreb lyoum ? Les spécialités du jour sont… »' },
-      { step: 'Confirmation', action: "Répéter la commande : « Donc un flat white et un jus d'orange ?»" },
-      { step: 'Service', action: 'Poser la boisson avec le sourire : « Tafadhal, seha w hana !»' },
-      { step: 'Check 5 min après', action: '« Kol chay cava ? Theb haja okhra ?»' },
-      { step: 'Au revoir', action: '« Chokran w narouk qrib ! Nhar saïd !» + sourire' },
-    ]
-  },
-  standards: {
-    title: 'Standards Outside',
-    icon: '🎯',
-    items: [
-      { label: 'Accueil client', standard: 'Prise en charge en 30 secondes dès l\'entrée' },
-      { label: 'Extraction espresso', standard: '25–30 secondes — crema dorée' },
-      { label: 'Temps de service', standard: '5 minutes maximum pour toute boisson chaude' },
-      { label: 'Nettoyage bar', standard: 'Toutes les 30 minutes minimum' },
-      { label: 'Sourire', standard: 'Obligatoire — même les jours difficiles' },
-      { label: 'Uniforme', standard: 'Propre, tablier attaché, cheveux attachés' },
+      { step: 'Accueil (0-30 sec)', action: 'Marhba bik fi Outside ! + sourire + contact visuel' },
+      { step: 'Installation', action: 'Proposer une table ou laisser choisir' },
+      { step: 'Commande (max 2 min)', action: 'Chno theb tichreb lyoum ? Les speciales du jour sont...' },
+      { step: 'Confirmation', action: 'Repeter la commande avant de lancer' },
+      { step: 'Service', action: 'Tafadhal, seha w hana !' },
+      { step: 'Check 5 min apres', action: 'Kol chay cava ? Theb haja okhra ?' },
+      { step: 'Au revoir', action: 'Chokran w narouk qrib ! Nhar said !' },
     ]
   },
   espresso: {
     title: 'Standards espresso',
     icon: '☕',
     items: [
-      { label: 'Dose café', standard: '18–20g par double shot' },
-      { label: 'Temps d\'extraction', standard: '25–30 secondes' },
-      { label: 'Volume en tasse', standard: '30–40ml (double espresso)' },
+      { label: 'Dose cafe', standard: '18-20g par double shot' },
+      { label: 'Extraction', standard: '25-30 secondes' },
+      { label: 'Volume', standard: '30-40ml (double)' },
       { label: 'Pression machine', standard: '9 bars' },
-      { label: 'Température eau', standard: '90–96°C' },
-      { label: 'Couleur crema', standard: 'Brun doré — ni noire ni trop claire' },
+      { label: 'Temperature eau', standard: '90-96°C' },
+      { label: 'Crema', standard: 'Brun dore — ni noire ni trop claire' },
     ]
   },
   milk: {
     title: 'Technique lait vapeur',
     icon: '🥛',
     steps: [
-      { step: 'Remplissage', action: 'Remplir la carafe au 1/3 — le lait double de volume' },
-      { step: 'Purge', action: 'Purger la lance vapeur 2 secondes avant de commencer' },
-      { step: 'Position', action: 'Lance légèrement sous la surface — angle 45°' },
-      { step: 'Phase 1 — texture', action: 'Lance près de la surface — créer un tourbillon — 5 à 7 sec' },
-      { step: 'Phase 2 — chauffe', action: 'Plonger la lance plus profond pour monter en température' },
-      { step: 'Stop', action: 'Arrêter à 60–65°C (ou quand la carafe brûle la main)' },
-      { step: 'Finition', action: 'Taper la carafe, faire des cercles pour lisser' },
-      { step: 'Service', action: 'Verser immédiatement — la mousse n\'attend pas' },
+      { step: 'Remplissage', action: 'Carafe au 1/3 — le lait double de volume' },
+      { step: 'Purge', action: 'Purger la lance 2 secondes avant' },
+      { step: 'Phase texture', action: 'Lance pres surface — tourbillon 5-7 sec' },
+      { step: 'Phase chauffe', action: 'Lance plus profond — monter en temperature' },
+      { step: 'Stop', action: '60-65 degres (carafe brule la main)' },
+      { step: 'Finition', action: 'Taper la carafe, faire des cercles' },
+      { step: 'Service', action: 'Verser immediatement' },
     ]
   },
   crossselling: {
-    title: 'Cross-selling — Eau & Cookies',
+    title: 'Cross-selling Eau & Cookies',
     icon: '💧',
+    scripts: [
+      { moment: 'A la prise de commande', phrase: 'Et pourquoi pas une eau fraiche ? On a des plateaux et des petites bouteilles.' },
+      { moment: 'Client espresso', phrase: "Je t'amene une petite eau avec le cafe ?" },
+      { moment: 'Client avec laptop', phrase: "Je pose une bouteille d'eau sur la table ?" },
+      { moment: 'A la prise de commande (cafe)', phrase: "Et un cookie avec le cafe ? Ils sont arrives ce matin, tout frais." },
+      { moment: 'Combo gagnant', phrase: "Mzien — et j'ajoute une eau fraiche et un cookie ?" },
+    ]
   },
   nono: {
     title: 'Ce qu\'on ne fait jamais',
     icon: '🚫',
     items: [
-      'Ne jamais réchauffer du lait vapeur une deuxième fois — recommencer de zéro',
-      'Ne jamais servir un espresso extrait depuis plus de 30 secondes — le refaire',
-      'Ne jamais goûter avec une cuillère qu\'on remet dans la boisson',
-      'Ne jamais utiliser du lait périmé, même « pour tester »',
+      'Ne jamais rechauffer du lait vapeur une deuxieme fois',
+      'Ne jamais servir un espresso extrait depuis plus de 30 secondes',
+      'Ne jamais utiliser du lait perime',
       'Ne jamais laisser la machine sans surveillance',
-      'Ne jamais dire « non » sans proposer une alternative',
-      'Ne jamais parler entre collègues devant le client',
-      'Ne jamais mettre son argent personnel dans la caisse pour compenser une erreur',
+      'Ne jamais dire non sans proposer une alternative',
+      'Ne jamais parler entre collegues devant le client',
+      'Ne jamais mettre son argent dans la caisse pour compenser',
     ]
   },
   emergency: {
-    title: 'Situations d\'urgence & difficiles',
+    title: 'Situations difficiles',
     icon: '🚨',
     protocols: [
-      { situation: 'Mauvaise commande', response: 'Refaire immédiatement sans discussion. « Je vous refais ça tout de suite.»' },
-      { situation: 'Longue attente', response: 'S\'excuser, expliquer, proposer de l\'eau pendant l\'attente' },
-      { situation: 'Client agressif', response: 'Rester calme, baisser le ton, appeler le responsable immédiatement' },
-      { situation: 'Commande oubliée', response: 'S\'excuser sincèrement, priorité immédiate, offrir un geste commercial' },
-      { situation: 'Plainte sur le prix', response: 'Expliquer la valeur avec fierté — ne jamais négocier les prix' },
-      { situation: 'Wi-Fi en panne', response: 'Informer immédiatement, donner une heure estimée, offrir un café pendant l\'attente' },
-      { situation: 'Incendie', response: 'Évacuer tous les clients par la sortie principale — appeler les secours immédiatement' },
-      { situation: 'Client malaise', response: 'Appeler les secours immédiatement — ne pas déplacer — rester à côté' },
+      { situation: 'Mauvaise commande', response: 'Refaire immediatement sans discussion.' },
+      { situation: 'Longue attente', response: "S'excuser, expliquer, proposer de l'eau." },
+      { situation: 'Client agressif', response: 'Rester calme, appeler le responsable.' },
+      { situation: 'Commande oubliee', response: "S'excuser sincèrement, priorite immediate." },
+      { situation: 'Plainte sur le prix', response: 'Expliquer la valeur — ne jamais negocier.' },
     ]
   },
   evaluation: {
-    title: 'Grille d\'évaluation mensuelle',
+    title: 'Evaluation mensuelle',
     icon: '📊',
     criteria: [
-      { label: 'Ponctualité & uniforme', points: 20 },
-      { label: 'Qualité des boissons (espresso, lait)', points: 20 },
+      { label: 'Ponctualite & uniforme', points: 20 },
+      { label: 'Qualite des boissons', points: 20 },
       { label: 'Accueil & relation client', points: 20 },
-      { label: 'Propreté du poste de travail', points: 15 },
-      { label: 'Respect des protocoles d\'hygiène', points: 15 },
-      { label: 'Esprit d\'équipe & communication', points: 10 },
-    ],
-    ratings: [
-      { range: '85–100', label: 'Excellent', color: 'green', note: 'Bravo !' },
-      { range: '70–84', label: 'Bien', color: 'amber', note: 'Points d\'amélioration à travailler' },
-      { range: '< 70', label: 'À améliorer', color: 'red', note: 'Plan de progression avec le responsable' },
+      { label: 'Proprete du poste', points: 15 },
+      { label: 'Respect protocoles hygiene', points: 15 },
+      { label: 'Esprit equipe', points: 10 },
     ]
   }
 }
 
-const WATER_SCRIPTS = [
-  { moment: 'À la prise de commande (toujours)', phrase: '« Et pourquoi pas une eau fraîche ? On a des plateaux et des petites bouteilles.»' },
-  { moment: 'Client commande un espresso', phrase: '« Je t\'amène une petite eau avec le café ?»' },
-  { moment: 'Client commande smoothie / frappé', phrase: '« Une eau plate avec ta commande ? N\'oublie pas l\'hydratation !»' },
-  { moment: 'Client vient travailler avec laptop', phrase: '« Je pose une bouteille d\'eau sur la table ?»' },
-  { moment: 'Check 5 min après le service', phrase: '« Tu veux que je t\'amène une eau fraîche ?»' },
-  { moment: 'Journée chaude', phrase: '« Il fait chaud aujourd\'hui — une eau fraîche avec ton café ?»' },
-]
-
-const COOKIE_SCRIPTS = [
-  { moment: 'À la prise de commande (café)', phrase: '« Et un cookie avec le café ? Ils sont arrivés ce matin, tout frais.»' },
-  { moment: 'Client hésite sur son choix', phrase: '« Le cookie [nom] va super bien avec le latte — les habitués adorent.»' },
-  { moment: 'Client seul avec laptop', phrase: '« Je t\'amène un cookie ? Carburant idéal pour bosser !»' },
-  { moment: 'Groupe / amis', phrase: '« Je vous mets une assiette de cookies à partager ?»' },
-  { moment: 'Client finit sa boisson', phrase: '« Tu veux un cookie pour finir ?»' },
-  { moment: 'Fin d\'après-midi (coup de mou)', phrase: '« Cookie pour la pause de 16h45 ?»' },
-]
-
-const COMBO_SCRIPTS = [
-  { type: 'Café classique seul', phrase: '« Et j\'ajoute une eau plate et un cookie chocolat ?»' },
-  { type: 'Boisson sucrée / frappé', phrase: '« Une eau pour équilibrer et un cookie pour le plaisir ?»' },
-  { type: 'Client pressé', phrase: '« Rapide — eau et cookie à emporter ?»' },
-  { type: 'Client fidèle', phrase: '« Ton habituel — et on ajoute un cookie aujourd\'hui ?»' },
-  { type: 'Première visite', phrase: '« Bienvenue ! On a des cookies maison — tu essaies avec ton café ?»' },
-]
-
 function Section({ title, icon, children, defaultOpen = false }) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div className="card" style={{ marginBottom: '10px' }}>
-      <div style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+    <div className="card" style={{ marginBottom: '8px' }}>
+      <div style={{ padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
         onClick={() => setOpen(o => !o)}>
         <span style={{ fontSize: '1.1rem' }}>{icon}</span>
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 400, flex: 1 }}>{title}</span>
-        {open ? <ChevronUp size={18} color="var(--muted)" /> : <ChevronDown size={18} color="var(--muted)" />}
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.975rem', fontWeight: 400, flex: 1 }}>{title}</span>
+        {open ? <ChevronUp size={17} color="var(--muted)" /> : <ChevronDown size={17} color="var(--muted)" />}
       </div>
-      {open && <div style={{ padding: '0 1.5rem 1.25rem', borderTop: '1px solid var(--brown-100)' }}>
-        {children}
-      </div>}
-    </div>
-  )
-}
-
-function StepTable({ steps }) {
-  return (
-    <div style={{ marginTop: '0.75rem' }}>
-      {steps.map((s, i) => (
-        <div key={i} style={{ display: 'flex', gap: '12px', padding: '0.6rem 0', borderBottom: '1px solid var(--brown-50)', alignItems: 'flex-start' }}>
-          <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--brown-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 600, color: 'var(--brown-600)', flexShrink: 0, marginTop: 2 }}>{i + 1}</div>
-          <div>
-            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{s.step}</div>
-            <div style={{ fontSize: '0.9rem', color: 'var(--ink)', marginTop: '1px' }}>{s.action}</div>
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function StandardsTable({ items }) {
-  return (
-    <div className="table-wrap" style={{ marginTop: '0.75rem' }}>
-      <table>
-        <thead><tr><th>Élément</th><th>Standard</th></tr></thead>
-        <tbody>
-          {items.map((item, i) => (
-            <tr key={i}>
-              <td style={{ fontWeight: 500, fontSize: '0.875rem' }}>{item.label}</td>
-              <td style={{ fontSize: '0.875rem' }}>{item.standard}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function ScriptTable({ scripts }) {
-  return (
-    <div style={{ marginTop: '0.75rem' }}>
-      {scripts.map((s, i) => (
-        <div key={i} style={{ padding: '0.75rem 0', borderBottom: '1px solid var(--brown-50)' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>{s.moment || s.type}</div>
-          <div style={{ fontSize: '0.9rem', color: 'var(--brown-700)', fontStyle: 'italic', background: 'var(--brown-50)', padding: '6px 10px', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--accent)' }}>{s.phrase}</div>
-        </div>
-      ))}
+      {open && <div style={{ padding: '0 1.1rem 1rem', borderTop: '1.5px solid var(--outside-cream)' }}>{children}</div>}
     </div>
   )
 }
 
 export default function Standards() {
   const s = OUTSIDE_STANDARDS
-
   return (
     <>
       <div className="page-header">
-        <h1 className="page-title">Standards Outside</h1>
-        <p className="page-subtitle">SOP v1 2025 — Your Everyday Escape</p>
+        <h1 className="page-title">Standards SOP</h1>
+        <p className="page-subtitle">Outside v1 2025 — Your Everyday Escape</p>
       </div>
 
       <div className="page-content">
         {/* VALEURS */}
-        <div className="card" style={{ marginBottom: '1.5rem', background: 'var(--brown-800)', border: 'none' }}>
-          <div style={{ padding: '1.25rem 1.5rem' }}>
-            <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--brown-300)', marginBottom: '8px' }}>Les 4 valeurs Outside</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
-              {[
-                { v: 'Qualité', d: 'Chaque boisson préparée avec soin' },
-                { v: 'Accueil', d: 'Sourire sincère, même en rush' },
-                { v: 'Régularité', d: 'Le café du matin = le café du soir' },
-                { v: 'Ambiance', d: 'On crée une atmosphère, pas juste un service' },
-              ].map(({ v, d }) => (
-                <div key={v} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', color: 'var(--accent)', marginBottom: '2px' }}>{v}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--brown-300)', lineHeight: 1.4 }}>{d}</div>
-                </div>
-              ))}
-            </div>
+        <div style={{ background: 'var(--outside-dark)', borderRadius: 'var(--radius-lg)', padding: '1rem', marginBottom: '1rem' }}>
+          <div style={{ fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--outside-amber)', fontWeight: 800, marginBottom: '8px' }}>
+            Les 4 valeurs Outside
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            {[
+              { v: 'Qualite', d: 'Chaque boisson preparee avec soin' },
+              { v: 'Accueil', d: 'Sourire sincere, meme en rush' },
+              { v: 'Regularite', d: 'Le cafe du matin = le cafe du soir' },
+              { v: 'Ambiance', d: 'On cree une atmosphere' },
+            ].map(({ v, d }) => (
+              <div key={v} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 'var(--radius-md)', padding: '8px 10px' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', color: 'var(--outside-orange)', marginBottom: '2px' }}>{v}</div>
+                <div style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)', lineHeight: 1.4 }}>{d}</div>
+              </div>
+            ))}
           </div>
         </div>
 
         <Section title={s.reception.title} icon={s.reception.icon} defaultOpen>
-          <StepTable steps={s.reception.steps} />
-          <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: 'var(--brown-50)', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', color: 'var(--muted)' }}>
-            💡 Règle d'or : toujours être proactif. Si tu vois un client attendre — va lui parler. <strong>Un client informé = un client patient.</strong>
-          </div>
-        </Section>
-
-        <Section title={s.standards.title} icon={s.standards.icon}>
-          <StandardsTable items={s.standards.items} />
+          {s.reception.steps.map((st, i) => (
+            <div key={i} style={{ display: 'flex', gap: '10px', padding: '0.6rem 0', borderBottom: '1px solid var(--outside-cream)' }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--outside-cream)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 800, color: 'var(--outside-dark)', flexShrink: 0, marginTop: 2 }}>{i + 1}</div>
+              <div>
+                <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{st.step}</div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 600, marginTop: '1px' }}>{st.action}</div>
+              </div>
+            </div>
+          ))}
         </Section>
 
         <Section title={s.espresso.title} icon={s.espresso.icon}>
-          <StandardsTable items={s.espresso.items} />
-          <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: '#FEF3DC', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', color: '#7A5000' }}>
-            ⚠️ Machine ne chauffe pas correctement ? 1. Vérifier l'interrupteur principal (ON). 2. Vérifier la pression (8–9 bars). 3. Si problème persiste : appeler le responsable technique immédiatement. 4. Prévoir des alternatives : café filtre, boissons froides. Ne pas servir un espresso raté sans en informer le responsable.
-          </div>
+          {s.espresso.items.map((it, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', borderBottom: '1px solid var(--outside-cream)', fontSize: '0.875rem' }}>
+              <span style={{ fontWeight: 600 }}>{it.label}</span>
+              <span style={{ fontWeight: 800, color: 'var(--outside-orange)' }}>{it.standard}</span>
+            </div>
+          ))}
         </Section>
 
         <Section title={s.milk.title} icon={s.milk.icon}>
-          <StepTable steps={s.milk.steps} />
+          {s.milk.steps.map((st, i) => (
+            <div key={i} style={{ display: 'flex', gap: '10px', padding: '0.6rem 0', borderBottom: '1px solid var(--outside-cream)' }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--outside-cream)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 800, color: 'var(--outside-dark)', flexShrink: 0, marginTop: 2 }}>{i + 1}</div>
+              <div>
+                <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase' }}>{st.step}</div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 600, marginTop: '1px' }}>{st.action}</div>
+              </div>
+            </div>
+          ))}
         </Section>
 
         <Section title={s.crossselling.title} icon={s.crossselling.icon}>
-          <div style={{ padding: '0.75rem 1rem', background: 'var(--brown-50)', borderRadius: 'var(--radius-md)', fontSize: '0.875rem', marginTop: '0.75rem', borderLeft: '3px solid var(--accent)' }}>
-            <strong>La règle d'or du cross-selling Outside :</strong> Proposer une seule fois, avec le sourire, au bon moment. Ne jamais insister. « Non merci » s'accepte avec courtoisie.
+          <div style={{ background: 'var(--outside-cream)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', margin: '0.75rem 0', fontSize: '0.82rem', fontWeight: 700, borderLeft: '3px solid var(--outside-orange)' }}>
+            Proposer une seule fois, avec sourire. Ne jamais insister.
           </div>
-
-          <div style={{ marginTop: '1.25rem' }}>
-            <div className="section-label">💧 Eau — scripts et moments</div>
-            <ScriptTable scripts={WATER_SCRIPTS} />
-          </div>
-
-          <div style={{ marginTop: '1.25rem' }}>
-            <div className="section-label">🍪 Cookies — scripts et moments</div>
-            <ScriptTable scripts={COOKIE_SCRIPTS} />
-          </div>
-
-          <div style={{ marginTop: '1.25rem' }}>
-            <div className="section-label">🎯 Combo gagnant — Eau + Cookie</div>
-            <div style={{ padding: '0.75rem 1rem', background: 'var(--brown-800)', borderRadius: 'var(--radius-md)', marginBottom: '0.75rem' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--brown-300)', marginBottom: '4px' }}>La phrase Outside</div>
-              <div style={{ fontSize: '0.95rem', color: 'var(--cream)', fontStyle: 'italic' }}>« Mzien — et j'ajoute une eau fraîche et un cookie [nom du cookie] ?»</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--brown-300)', marginTop: '4px' }}>Dire avec le sourire au moment de confirmer la commande — taux de conversion élevé.</div>
+          {s.crossselling.scripts.map((sc, i) => (
+            <div key={i} style={{ padding: '0.6rem 0', borderBottom: '1px solid var(--outside-cream)' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: '3px' }}>{sc.moment}</div>
+              <div style={{ fontSize: '0.875rem', fontStyle: 'italic', background: 'var(--outside-cream)', padding: '5px 9px', borderRadius: 'var(--radius-sm)', borderLeft: '2px solid var(--outside-orange)', fontWeight: 600 }}>
+                {sc.phrase}
+              </div>
             </div>
-            <ScriptTable scripts={COMBO_SCRIPTS} />
-          </div>
-
-          <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: 'var(--brown-50)', borderRadius: 'var(--radius-md)', fontSize: '0.82rem', color: 'var(--muted)' }}>
-            <strong>Objectif équipe :</strong> Proposer l'eau sur 100% des tables · Proposer le cookie sur 80% des commandes
-          </div>
+          ))}
         </Section>
 
         <Section title={s.nono.title} icon={s.nono.icon}>
-          <div style={{ marginTop: '0.75rem' }}>
-            {s.nono.items.map((item, i) => (
-              <div key={i} style={{ display: 'flex', gap: '10px', padding: '0.5rem 0', borderBottom: '1px solid var(--brown-50)', fontSize: '0.875rem', alignItems: 'flex-start' }}>
-                <span style={{ color: 'var(--danger)', flexShrink: 0, marginTop: '1px' }}>✕</span>
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
+          {s.nono.items.map((item, i) => (
+            <div key={i} style={{ display: 'flex', gap: '8px', padding: '0.55rem 0', borderBottom: '1px solid var(--outside-cream)', fontSize: '0.875rem', alignItems: 'flex-start' }}>
+              <span style={{ color: 'var(--danger)', flexShrink: 0, fontWeight: 800 }}>✕</span>
+              <span style={{ fontWeight: 600 }}>{item}</span>
+            </div>
+          ))}
         </Section>
 
         <Section title={s.emergency.title} icon={s.emergency.icon}>
-          <div style={{ marginTop: '0.75rem' }}>
-            {s.emergency.protocols.map((p, i) => (
-              <div key={i} style={{ padding: '0.75rem 0', borderBottom: '1px solid var(--brown-50)' }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '3px' }}>{p.situation}</div>
-                <div style={{ fontSize: '0.875rem' }}>{p.response}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: '#FDEEEC', borderRadius: 'var(--radius-md)', fontSize: '0.85rem', color: 'var(--danger)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            <div><strong>N° Responsable :</strong><br /><span style={{ color: 'var(--ink)' }}>_________________</span></div>
-            <div><strong>N° Urgences :</strong><br /><span style={{ color: 'var(--ink)' }}>_________________</span></div>
-          </div>
+          {s.emergency.protocols.map((p, i) => (
+            <div key={i} style={{ padding: '0.6rem 0', borderBottom: '1px solid var(--outside-cream)' }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--danger)', textTransform: 'uppercase', marginBottom: '2px' }}>{p.situation}</div>
+              <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>{p.response}</div>
+            </div>
+          ))}
         </Section>
 
         <Section title={s.evaluation.title} icon={s.evaluation.icon}>
-          <div className="table-wrap" style={{ marginTop: '0.75rem' }}>
-            <table>
-              <thead><tr><th>Critère</th><th style={{ textAlign: 'right' }}>Points</th></tr></thead>
-              <tbody>
-                {s.evaluation.criteria.map((c, i) => (
-                  <tr key={i}>
-                    <td style={{ fontSize: '0.875rem' }}>{c.label}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600, fontFamily: 'var(--font-display)' }}>/  {c.points}</td>
-                  </tr>
-                ))}
-                <tr style={{ background: 'var(--brown-50)' }}>
-                  <td style={{ fontWeight: 600 }}>Total</td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>/ 100</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '1rem', flexWrap: 'wrap' }}>
-            {s.evaluation.ratings.map(r => (
-              <div key={r.range} style={{ flex: 1, minWidth: '120px', padding: '10px', borderRadius: 'var(--radius-md)', background: r.color === 'green' ? '#EBF5EE' : r.color === 'amber' ? '#FEF3DC' : '#FDEEEC' }}>
-                <div style={{ fontSize: '1rem', fontFamily: 'var(--font-display)', color: r.color === 'green' ? '#2D6A3F' : r.color === 'amber' ? '#7A5000' : 'var(--danger)' }}>{r.range}</div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: r.color === 'green' ? '#2D6A3F' : r.color === 'amber' ? '#7A5000' : 'var(--danger)' }}>{r.label}</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '2px' }}>{r.note}</div>
+          {s.evaluation.criteria.map((c, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.6rem 0', borderBottom: '1px solid var(--outside-cream)', fontSize: '0.875rem' }}>
+              <span style={{ fontWeight: 600 }}>{c.label}</span>
+              <span style={{ fontWeight: 800, color: 'var(--outside-orange)', fontSize: '1rem', fontFamily: 'var(--font-display)' }}>/{c.points}</span>
+            </div>
+          ))}
+          <div style={{ display: 'flex', gap: '6px', marginTop: '0.75rem' }}>
+            {[{ r: '85-100', l: 'Excellent', c: 'green' }, { r: '70-84', l: 'Bien', c: 'amber' }, { r: '<70', l: 'A ameliorer', c: 'red' }].map(r => (
+              <div key={r.r} style={{ flex: 1, background: r.c === 'green' ? '#E0F2EB' : r.c === 'amber' ? '#FEF3DC' : '#FDEEEC', borderRadius: 'var(--radius-md)', padding: '8px', textAlign: 'center' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', color: r.c === 'green' ? 'var(--outside-green)' : r.c === 'amber' ? '#7A5000' : 'var(--danger)' }}>{r.r}</div>
+                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: r.c === 'green' ? 'var(--outside-green)' : r.c === 'amber' ? '#7A5000' : 'var(--danger)' }}>{r.l}</div>
               </div>
             ))}
           </div>
