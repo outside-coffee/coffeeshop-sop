@@ -2,7 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 import {
   BarChart2, CheckSquare, Coffee, Package,
-  BookOpen, Star, Users, LogOut, MoreHorizontal, X, Shield, TrendingUp
+  BookOpen, Star, Users, LogOut, MoreHorizontal, X, Shield, TrendingUp, ListChecks
 } from 'lucide-react'
 import { useAuth, hasRole } from '../hooks/useAuth'
 import { Avatar } from './UI'
@@ -19,7 +19,8 @@ const MORE_NAV = [
   { to: '/recettes',  icon: BookOpen, label: 'Recettes',      minRole: 'barista' },
   { to: '/standards', icon: Star,     label: 'Standards',     minRole: 'barista' },
   { to: '/equipe',    icon: Users,    label: 'Equipe',        minRole: 'manager' },
-  { to: '/ecarts',    icon: TrendingUp, label: 'Ecarts',       minRole: 'manager' },
+  { to: '/ecarts',          icon: TrendingUp, label: 'Ecarts',     minRole: 'manager' },
+  { to: '/checklist-admin', icon: ListChecks,  label: 'Listes',      minRole: 'admin'   },
 ]
 
 const ALL_NAV = [
@@ -31,7 +32,8 @@ const ALL_NAV = [
   { to: '/recettes',  icon: BookOpen,    label: 'Recettes',   section: null,             minRole: 'barista' },
   { to: '/standards', icon: Star,        label: 'Standards',  section: null,             minRole: 'barista' },
   { to: '/equipe',    icon: Users,       label: 'Equipe',     section: 'Gestion',        minRole: 'manager' },
-  { to: '/ecarts',    icon: TrendingUp,  label: 'Ecarts',     section: null,             minRole: 'manager' },
+  { to: '/ecarts',          icon: TrendingUp, label: 'Ecarts',    section: null,          minRole: 'manager' },
+  { to: '/checklist-admin', icon: ListChecks, label: 'Listes',    section: null,          minRole: 'admin'   },
 ]
 
 const ROLE_STYLES = {
@@ -52,10 +54,6 @@ export default function Sidebar() {
   const visiblePrimary = PRIMARY_NAV.filter(i => hasRole(profile, i.minRole))
   const visibleMore    = MORE_NAV.filter(i => hasRole(profile, i.minRole))
   const isMoreActive   = visibleMore.some(i => location.pathname === i.to)
-
-    console.log('ALL_NAV', ALL_NAV)
-  console.log('profile role', profile?.role)
-  console.log('visible nav', ALL_NAV.filter(i => hasRole(profile, i.minRole)))
 
   return (
     <>

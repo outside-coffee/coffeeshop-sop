@@ -12,6 +12,7 @@ import Recipes from './pages/Recipes'
 import Standards from './pages/Standards'
 import Team from './pages/Team'
 import Ecarts from './pages/Ecarts'
+import ChecklistAdmin from './pages/ChecklistAdmin'
 import { Spinner } from './components/UI'
 
 function ProtectedLayout() {
@@ -39,6 +40,7 @@ function ProtectedLayout() {
           <Route path="/standards" element={<Standards />} />
           <Route path="/equipe" element={<Team />} />
           <Route path="/ecarts" element={<Ecarts />} />
+          <Route path="/checklist-admin" element={<ChecklistAdmin />} />
         </Routes>
       </main>
       <ToastContainer />
