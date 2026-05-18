@@ -30,11 +30,12 @@ function ecartColor(p) {
   return 'var(--ink)'
 }
 
-const today = new Date()
+const today     = new Date()
+const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
 const PERIODES = [
-  { label: 'Ce mois',    from: format(startOfMonth(today), 'yyyy-MM-dd'), to: format(today, 'yyyy-MM-dd') },
+  { label: 'Ce mois',    from: format(startOfMonth(today), 'yyyy-MM-dd'), to: format(yesterday, 'yyyy-MM-dd') },
   { label: 'M-1',        from: format(startOfMonth(subMonths(today,1)), 'yyyy-MM-dd'), to: format(endOfMonth(subMonths(today,1)), 'yyyy-MM-dd') },
-  { label: 'S en cours', from: format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd'), to: format(today, 'yyyy-MM-dd') },
+  { label: 'S en cours', from: format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd'), to: format(yesterday, 'yyyy-MM-dd') },
   { label: 'S-1',        from: format(startOfWeek(subWeeks(today,1), { weekStartsOn: 1 }), 'yyyy-MM-dd'), to: format(endOfWeek(subWeeks(today,1), { weekStartsOn: 1 }), 'yyyy-MM-dd') },
 ]
 
