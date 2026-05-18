@@ -73,7 +73,7 @@ export default function Ecarts() {
 
     // 3. Matières premières
     const { data: mp } = await supabase.from('matiere_premiere')
-      .select('matiere, unite, prix')
+      .select('matiere, unite, prix, quantite')
 
     if (!ventes || !compoAll || !mp) { setLoading(false); return }
 
