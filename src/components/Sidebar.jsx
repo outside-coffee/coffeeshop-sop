@@ -2,7 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 import {
   BarChart2, CheckSquare, Coffee, Package,
-  BookOpen, Star, Users, LogOut, MoreHorizontal, X, Shield, TrendingUp, ListChecks
+  BookOpen, Star, Users, LogOut, MoreHorizontal, X, Shield, TrendingUp, ListChecks, Award, CalendarDays, ClipboardList
 } from 'lucide-react'
 import { useAuth, hasRole } from '../hooks/useAuth'
 import { Avatar } from './UI'
@@ -20,7 +20,9 @@ const MORE_NAV = [
   { to: '/standards', icon: Star,     label: 'Standards',     minRole: 'barista' },
   { to: '/equipe',    icon: Users,    label: 'Equipe',        minRole: 'manager' },
   { to: '/ecarts',          icon: TrendingUp, label: 'Ecarts',     minRole: 'manager' },
-  { to: '/checklist-admin', icon: ListChecks,  label: 'Listes',      minRole: 'admin'   },
+  { to: '/performance',      icon: Award,       label: 'Performance',  minRole: 'manager' },
+  { to: '/checklist-admin', icon: ListChecks,    label: 'Listes',       minRole: 'admin'   },
+  { to: '/admin-tasks',      icon: ClipboardList, label: 'Taches admin', minRole: 'manager' },
 ]
 
 const ALL_NAV = [
@@ -33,7 +35,9 @@ const ALL_NAV = [
   { to: '/standards', icon: Star,        label: 'Standards',  section: null,             minRole: 'barista' },
   { to: '/equipe',    icon: Users,       label: 'Equipe',     section: 'Gestion',        minRole: 'manager' },
   { to: '/ecarts',          icon: TrendingUp, label: 'Ecarts',    section: null,          minRole: 'manager' },
-  { to: '/checklist-admin', icon: ListChecks, label: 'Listes',    section: null,          minRole: 'admin'   },
+  { to: '/performance',      icon: Award,       label: 'Performance',  section: null, minRole: 'manager' },
+  { to: '/checklist-admin', icon: ListChecks,    label: 'Listes',       section: null, minRole: 'admin'   },
+  { to: '/admin-tasks',      icon: ClipboardList, label: 'Taches admin', section: null, minRole: 'manager' },
 ]
 
 const ROLE_STYLES = {
