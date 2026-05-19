@@ -7,9 +7,8 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 const SHIFTS = [
-  { value: 'morning',   label: 'Matin (6h-14h)' },
-  { value: 'afternoon', label: 'Apres-midi (12h-20h)' },
-  { value: 'full',      label: 'Journee (8h-17h)' },
+  { value: 'morning',   label: 'Matin (8h-16h)' },
+  { value: 'afternoon', label: 'Soir (16h-fermeture)' },
 ]
 
 export default function ShiftReport() {
@@ -108,15 +107,9 @@ export default function ShiftReport() {
             <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: '0.75rem' }}>
               Ventes & caisse
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">CA (DT)</label>
-                <input className="form-input" type="number" step="0.01" min="0" placeholder="ex: 480" value={form.ca} onChange={e => set('ca', e.target.value)} />
-              </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Passages</label>
-                <input className="form-input" type="number" min="0" placeholder="ex: 95" value={form.covers} onChange={e => set('covers', e.target.value)} />
-              </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">CA (DT)</label>
+              <input className="form-input" type="number" step="0.01" min="0" placeholder="ex: 480" value={form.ca} onChange={e => set('ca', e.target.value)} />
             </div>
             <div className="form-group" style={{ marginTop: '0.75rem', marginBottom: 0 }}>
               <label className="form-label">Caisse</label>
