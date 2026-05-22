@@ -15,6 +15,7 @@ import Ecarts from './pages/Ecarts'
 import Performance from './pages/Performance'
 import ChecklistAdmin from './pages/ChecklistAdmin'
 import AdminTasks from './pages/ChecklistAdmin2'
+import Staff from './pages/Staff'
 import { Spinner } from './components/UI'
 
 function ProtectedLayout() {
@@ -44,6 +45,7 @@ function ProtectedLayout() {
           <Route path="/ecarts" element={<Ecarts />} />
           <Route path="/checklist-admin" element={<ChecklistAdmin />} />
           <Route path="/admin-tasks" element={<AdminTasks />} />
+          <Route path="/staff" element={<Staff />} />
           <Route path="/performance" element={<Performance />} />
         </Routes>
       </main>

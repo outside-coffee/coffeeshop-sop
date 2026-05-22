@@ -184,7 +184,7 @@ export default function Dashboard() {
                   <div>
                     <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{latestReport.profiles?.name}</div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
-                      {{ morning: 'Matin', afternoon: 'Apres-midi', full: 'Journee' }[latestReport.shift]}
+                      {{ morning: 'Matin (8h-16h)', afternoon: 'Soir (16h-ferm.)' }[latestReport.shift]}
                     </div>
                   </div>
                 </div>
@@ -276,7 +276,7 @@ export default function Dashboard() {
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>
-                      {{ morning: 'Matin', afternoon: 'Soir', full: 'Journee' }[r.shift]}
+                      {{ morning: 'Matin', afternoon: 'Soir' }[r.shift]}
                     </div>
                     {(r.stock_issues || r.equipment_issues || r.customer_incidents) && (
                       <div style={{ marginTop: '2px' }}>

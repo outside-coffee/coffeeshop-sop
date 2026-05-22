@@ -85,6 +85,13 @@ export default function ChecklistAdminPage() {
   }
 
   async function createDefaultTasks() {
+    // Vérifier que la table est vraiment vide avant d'insérer
+    const { count } = await supabase.from('admin_tasks').select('*', { count: 'exact', head: true })
+    if (count > 0) {
+      const { data } = await supabase.from('admin_tasks').select('*').eq('active', true).order('category').order('label')
+      setTasks(data || [])
+      return
+    }
     const toInsert = DEFAULT_TASKS.map((t, i) => ({ ...t, sort_order: i, active: true }))
     const { data } = await supabase.from('admin_tasks').insert(toInsert).select()
     setTasks(data || [])
@@ -139,8 +146,8 @@ export default function ChecklistAdminPage() {
 
   // Grouper par catégorie
   const categories = [...new Set(tasks.map(t => t.category))]
-  const totalDone  = Object.keys(checks).length
   const totalTasks = tasks.length
+  const totalDone  = tasks.filter(t => checks[t.id]).length
   const pct        = totalTasks > 0 ? Math.round(totalDone / totalTasks * 100) : 0
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '4rem' }}><Spinner size={32} /></div>

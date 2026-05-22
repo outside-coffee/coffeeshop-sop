@@ -2,7 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 import {
   BarChart2, CheckSquare, Coffee, Package,
-  BookOpen, Star, Users, LogOut, MoreHorizontal, X, Shield, TrendingUp, ListChecks, Award, CalendarDays, ClipboardList
+  BookOpen, Star, Users, LogOut, MoreHorizontal, X, Shield, TrendingUp, ListChecks, Award, ClipboardList, UsersRound
 } from 'lucide-react'
 import { useAuth, hasRole } from '../hooks/useAuth'
 import { Avatar } from './UI'
@@ -23,6 +23,7 @@ const MORE_NAV = [
   { to: '/performance',      icon: Award,       label: 'Performance',  minRole: 'manager' },
   { to: '/checklist-admin', icon: ListChecks,    label: 'Listes',       minRole: 'admin'   },
   { to: '/admin-tasks',      icon: ClipboardList, label: 'Taches admin', minRole: 'manager' },
+  { to: '/staff',              icon: UsersRound,    label: 'Staff',        minRole: 'manager' },
 ]
 
 const ALL_NAV = [
@@ -38,6 +39,7 @@ const ALL_NAV = [
   { to: '/performance',      icon: Award,       label: 'Performance',  section: null, minRole: 'manager' },
   { to: '/checklist-admin', icon: ListChecks,    label: 'Listes',       section: null, minRole: 'admin'   },
   { to: '/admin-tasks',      icon: ClipboardList, label: 'Taches admin', section: null, minRole: 'manager' },
+  { to: '/staff',              icon: UsersRound,    label: 'Staff',        section: null, minRole: 'manager' },
 ]
 
 const ROLE_STYLES = {
