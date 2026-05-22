@@ -114,8 +114,10 @@ export default function Ecarts() {
 
       if (baseKey) {
         const baseIngredients = baseMap[baseKey]
-        const qteBase  = parseFloat(c.quantite_m || 0)
-        const ratio    = qteBase / 1000
+        const qteBase   = parseFloat(c.quantite_m || 0)
+        // Ratio = qte utilisée / total de la base (somme de tous ses ingrédients)
+        const baseTotal = baseIngredients.reduce((s, bi) => s + parseFloat(bi.quantite_m || 0), 0)
+        const ratio     = baseTotal > 0 ? qteBase / baseTotal : qteBase / 1000
         for (const bi of baseIngredients) {
           const matiere    = bi.matiere
           const consoTot   = qteProd * ratio * parseFloat(bi.quantite_m || 0)
