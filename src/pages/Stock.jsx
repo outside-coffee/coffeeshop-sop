@@ -38,6 +38,11 @@ export default function Stock() {
   const [movNote, setMovNote]       = useState('')
   const [movPrice, setMovPrice]     = useState('')
   const [movSaving, setMovSaving]   = useState(false)
+  const [movFournisseur, setMovFournisseur] = useState('')
+  const [formats, setFormats]           = useState({}) // { itemId: [formats] }
+  const [movFormat, setMovFormat]       = useState(null)
+  const [facture, setFacture]       = useState(null)  // File object
+  const [factureUploading, setFactureUploading] = useState(false)
   const [movDone, setMovDone]       = useState(false)
 
   // Seuils
@@ -83,7 +88,19 @@ export default function Stock() {
   // ── MOUVEMENT SHEET ──────────────────────────────────────────────────
   function openSheet(item, mode) {
     setMovSheet({ item, mode })
-    setMovQty(''); setMovNote(''); setMovPrice(''); setMovDone(false)
+    setMovQty(''); setMovNote(''); setMovPrice(''); setMovFournisseur(''); setFacture(null); setMovDone(false); setMovFormat(null)
+    fetchFormats(item.id, item.name)
+  }
+
+  async function fetchFormats(itemId, itemName) {
+    if (formats[itemId]) return
+    const { data } = await supabase
+      .from('matiere_formats')
+      .select('*')
+      .eq('actif', true)
+      .ilike('matiere', itemName)
+      .order('poids')
+    if (data?.length) setFormats(prev => ({ ...prev, [itemId]: data }))
   }
 
   async function saveMouvement() {
@@ -94,9 +111,26 @@ export default function Stock() {
     const newQty = Math.max(0, movSheet.item.current_qty + delta)
     let note     = movNote || null
     if (movSheet.mode === 'reception' && movPrice) note = [note, `Prix: ${movPrice} DT`].filter(Boolean).join(' — ')
+
+    // Upload facture si présente
+    let facture_url = null
+    if (facture && movSheet.mode === 'reception') {
+      setFactureUploading(true)
+      const ext  = facture.name.split('.').pop()
+      const path = `${Date.now()}_${movSheet.item.id}.${ext}`
+      const { error: upErr } = await supabase.storage.from('factures').upload(path, facture)
+      if (!upErr) facture_url = path
+      setFactureUploading(false)
+    }
+
     await Promise.all([
       supabase.from('stock_items').update({ current_qty: newQty, updated_at: new Date().toISOString() }).eq('id', movSheet.item.id),
-      supabase.from('stock_movements').insert({ item_id: movSheet.item.id, type: movSheet.mode, qty: delta, note, done_by: profile?.id }),
+      supabase.from('stock_movements').insert({
+        item_id: movSheet.item.id, type: movSheet.mode, qty: delta,
+        note, done_by: profile?.id,
+        fournisseur: movFournisseur || null,
+        facture_url,
+      }),
     ])
     setItems(prev => prev.map(i => i.id === movSheet.item.id ? { ...i, current_qty: newQty } : i))
     setMovSaving(false)
@@ -292,10 +326,38 @@ export default function Stock() {
                   </button>
                 </div>
 
+                {/* FORMAT (si disponible) */}
+                {movSheet.mode === 'reception' && formats[movSheet.item.id]?.length > 0 && (
+                  <div className="form-group">
+                    <label className="form-label">Format</label>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                      {formats[movSheet.item.id].map(f => {
+                        const ppu = (parseFloat(f.prix) / parseFloat(f.poids)).toFixed(4)
+                        const sel = movFormat?.id === f.id
+                        return (
+                          <button key={f.id}
+                            onClick={() => { setMovFormat(f); setMovQty(String(f.poids)); setMovPrice(String(f.prix)) }}
+                            style={{ flex: 1, padding: '8px', borderRadius: 'var(--radius-md)', border: `2px solid ${sel ? 'var(--outside-orange)' : 'var(--outside-cream2)'}`, background: sel ? '#FFF8F5' : 'white', cursor: 'pointer', textAlign: 'left' }}>
+                            <div style={{ fontWeight: 800, fontSize: '0.85rem', color: sel ? 'var(--outside-orange)' : 'var(--ink)' }}>{f.label}</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 2 }}>{f.poids} {movSheet.item.unit} · {parseFloat(f.prix).toFixed(2)} DT</div>
+                            <div style={{ fontSize: '0.68rem', color: 'var(--outside-green)', fontWeight: 700 }}>{ppu} DT/{movSheet.item.unit}</div>
+                          </button>
+                        )
+                      })}
+                      <button
+                        onClick={() => { setMovFormat(null); setMovQty(''); setMovPrice('') }}
+                        style={{ padding: '8px 12px', borderRadius: 'var(--radius-md)', border: `2px solid ${!movFormat ? 'var(--outside-orange)' : 'var(--outside-cream2)'}`, background: !movFormat ? '#FFF8F5' : 'white', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700, color: 'var(--muted)' }}>
+                        Autre
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* QUANTITE */}
                 <div className="form-group">
                   <label className="form-label">Quantité ({movSheet.item.unit})</label>
-                  <input className="form-input" type="number" min="0" step="0.5" autoFocus
+                  <input className="form-input" type="number" min="0" step="0.5"
+                    autoFocus={!formats[movSheet.item.id]?.length}
                     placeholder="ex: 500"
                     value={movQty} onChange={e => setMovQty(e.target.value)}
                     style={{ fontSize: '1.2rem', fontWeight: 800, textAlign: 'center' }} />
@@ -320,6 +382,37 @@ export default function Stock() {
                   </div>
                 )}
 
+                {/* FOURNISSEUR (réception) */}
+                {movSheet.mode === 'reception' && (
+                  <div className="form-group">
+                    <label className="form-label">Fournisseur <span style={{ opacity: 0.6, fontWeight: 600 }}>optionnel</span></label>
+                    <input className="form-input" type="text"
+                      placeholder="ex: Metro, Carrefour..."
+                      value={movFournisseur} onChange={e => setMovFournisseur(e.target.value)} />
+                  </div>
+                )}
+
+                {/* FACTURE (réception + manager) */}
+                {movSheet.mode === 'reception' && isManager && (
+                  <div className="form-group">
+                    <label className="form-label">
+                      Facture <span style={{ opacity: 0.6, fontWeight: 600 }}>photo ou PDF</span>
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '0.65rem 1rem', border: `2px dashed ${facture ? 'var(--outside-green)' : 'var(--outside-cream2)'}`, borderRadius: 'var(--radius-md)', cursor: 'pointer', background: facture ? '#F0FFF8' : 'white' }}>
+                      <input type="file" accept="image/*,application/pdf" style={{ display: 'none' }}
+                        onChange={e => setFacture(e.target.files?.[0] || null)} />
+                      <span style={{ fontSize: '1.2rem' }}>{facture ? '✅' : '📄'}</span>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: facture ? 'var(--outside-green)' : 'var(--muted)' }}>
+                        {facture ? facture.name : 'Appuyer pour ajouter une facture'}
+                      </span>
+                      {facture && (
+                        <button onClick={e => { e.preventDefault(); setFacture(null) }}
+                          style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontWeight: 800 }}>✕</button>
+                      )}
+                    </label>
+                  </div>
+                )}
+
                 {/* NOTE */}
                 <div className="form-group">
                   <label className="form-label">Note <span style={{ opacity: 0.6, fontWeight: 600 }}>optionnel</span></label>
@@ -332,7 +425,7 @@ export default function Stock() {
                   style={{ width: '100%', justifyContent: 'center' }}
                   onClick={saveMouvement}
                   disabled={!movQty || parseFloat(movQty) <= 0 || movSaving}>
-                  {movSaving ? <Spinner size={18} /> : movSheet.mode === 'reception'
+                  {movSaving || factureUploading ? <Spinner size={18} /> : movSheet.mode === 'reception'
                     ? <><TrendingUp size={18} /> Enregistrer la réception</>
                     : <><TrendingDown size={18} /> Enregistrer la consommation</>
                   }
