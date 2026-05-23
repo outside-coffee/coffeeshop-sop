@@ -41,6 +41,7 @@ export default function Stock() {
   const [movFournisseur, setMovFournisseur] = useState('')
   const [formats, setFormats]           = useState({}) // { itemId: [formats] }
   const [movFormat, setMovFormat]       = useState(null)
+  const [formatQty, setFormatQty]       = useState('1')
   const [facture, setFacture]       = useState(null)  // File object
   const [factureUploading, setFactureUploading] = useState(false)
   const [movDone, setMovDone]       = useState(false)
@@ -54,8 +55,25 @@ export default function Stock() {
   useEffect(() => { if (editRef.current) editRef.current.focus() }, [editId])
 
   async function fetchItems() {
-    const { data } = await supabase.from('stock_items').select('*').eq('active', true).order('category').order('name')
-    setItems(data || [])
+    const [{ data: si }, { data: mp }] = await Promise.all([
+      supabase.from('stock_items').select('*').eq('active', true).order('category').order('name'),
+      supabase.from('matiere_premiere').select('matiere, prix, quantite, unite, actif'),
+    ])
+    // Map des matières actives
+    const mpMap = {}
+    const mpActif = new Set()
+    for (const m of (mp || [])) {
+      mpMap[m.matiere] = m.quantite > 0 ? parseFloat(m.prix||0) / parseFloat(m.quantite) : null
+      if (m.actif !== false) mpActif.add(m.matiere)
+    }
+    // Exclure les items dont la matière est désactivée dans Catalogue
+    const enriched = (si || [])
+      .filter(item => !item.matiere_ref || mpActif.has(item.matiere_ref))
+      .map(item => ({
+        ...item,
+        prixUnitaire: item.matiere_ref ? (mpMap[item.matiere_ref] || null) : null,
+      }))
+    setItems(enriched)
     setLoading(false)
   }
 
@@ -88,19 +106,23 @@ export default function Stock() {
   // ── MOUVEMENT SHEET ──────────────────────────────────────────────────
   function openSheet(item, mode) {
     setMovSheet({ item, mode })
-    setMovQty(''); setMovNote(''); setMovPrice(''); setMovFournisseur(''); setFacture(null); setMovDone(false); setMovFormat(null)
+    setMovQty(''); setMovNote(''); setMovPrice(''); setMovFournisseur(''); setFacture(null); setMovDone(false); setMovFormat(null); setFormatQty('1')
     fetchFormats(item.id, item.name)
   }
 
   async function fetchFormats(itemId, itemName) {
-    if (formats[itemId]) return
+    if (formats[itemId] !== undefined) return
+    // Normalise accents pour le matching
     const { data } = await supabase
       .from('matiere_formats')
       .select('*')
       .eq('actif', true)
-      .ilike('matiere', itemName)
       .order('poids')
-    if (data?.length) setFormats(prev => ({ ...prev, [itemId]: data }))
+    if (!data) return
+    // Matching souple : normalise les deux côtés
+    const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+    const matched = data.filter(f => norm(f.matiere) === norm(itemName))
+    setFormats(prev => ({ ...prev, [itemId]: matched }))
   }
 
   async function saveMouvement() {
@@ -327,16 +349,21 @@ export default function Stock() {
                 </div>
 
                 {/* FORMAT (si disponible) */}
-                {movSheet.mode === 'reception' && formats[movSheet.item.id]?.length > 0 && (
+                {formats[movSheet.item.id]?.length > 0 && (
                   <div className="form-group">
                     <label className="form-label">Format</label>
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: movFormat ? '0.75rem' : 0 }}>
                       {formats[movSheet.item.id].map(f => {
                         const ppu = (parseFloat(f.prix) / parseFloat(f.poids)).toFixed(4)
                         const sel = movFormat?.id === f.id
                         return (
                           <button key={f.id}
-                            onClick={() => { setMovFormat(f); setMovQty(String(f.poids)); setMovPrice(String(f.prix)) }}
+                            onClick={() => {
+                              setMovFormat(f)
+                              setMovQty(String(f.poids))
+                              setMovPrice(String(f.prix))
+                              setFormatQty('1')
+                            }}
                             style={{ flex: 1, padding: '8px', borderRadius: 'var(--radius-md)', border: `2px solid ${sel ? 'var(--outside-orange)' : 'var(--outside-cream2)'}`, background: sel ? '#FFF8F5' : 'white', cursor: 'pointer', textAlign: 'left' }}>
                             <div style={{ fontWeight: 800, fontSize: '0.85rem', color: sel ? 'var(--outside-orange)' : 'var(--ink)' }}>{f.label}</div>
                             <div style={{ fontSize: '0.7rem', color: 'var(--muted)', marginTop: 2 }}>{f.poids} {movSheet.item.unit} · {parseFloat(f.prix).toFixed(2)} DT</div>
@@ -345,11 +372,53 @@ export default function Stock() {
                         )
                       })}
                       <button
-                        onClick={() => { setMovFormat(null); setMovQty(''); setMovPrice('') }}
+                        onClick={() => { setMovFormat(null); setMovQty(''); setMovPrice(''); setFormatQty('1') }}
                         style={{ padding: '8px 12px', borderRadius: 'var(--radius-md)', border: `2px solid ${!movFormat ? 'var(--outside-orange)' : 'var(--outside-cream2)'}`, background: !movFormat ? '#FFF8F5' : 'white', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 700, color: 'var(--muted)' }}>
                         Autre
                       </button>
                     </div>
+
+                    {/* Quantité de formats */}
+                    {movFormat && (
+                      <div style={{ background: movSheet.mode === 'reception' ? 'var(--outside-cream)' : '#FEF3DC', borderRadius: 'var(--radius-md)', padding: '10px 14px' }}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>
+                          Nombre de {movFormat.label}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <button
+                            onClick={() => {
+                              const n = Math.max(1, parseInt(formatQty||1) - 1)
+                              setFormatQty(String(n))
+                              setMovQty(String(n * movFormat.poids))
+                              if (movSheet.mode === 'reception') setMovPrice(String((n * parseFloat(movFormat.prix)).toFixed(2)))
+                            }}
+                            style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'white', fontSize: '1.3rem', fontWeight: 800, cursor: 'pointer', color: 'var(--outside-dark)' }}>−</button>
+                          <input type="number" min="1"
+                            value={formatQty}
+                            onChange={e => {
+                              const n = Math.max(1, parseInt(e.target.value)||1)
+                              setFormatQty(String(n))
+                              setMovQty(String(n * movFormat.poids))
+                              if (movSheet.mode === 'reception') setMovPrice(String((n * parseFloat(movFormat.prix)).toFixed(2)))
+                            }}
+                            style={{ width: 60, textAlign: 'center', fontWeight: 800, fontSize: '1.2rem', border: `2px solid ${movSheet.mode === 'reception' ? 'var(--outside-orange)' : 'var(--outside-amber)'}`, borderRadius: 'var(--radius-sm)', padding: '4px', fontFamily: 'var(--font-body)', outline: 'none' }} />
+                          <button
+                            onClick={() => {
+                              const n = parseInt(formatQty||1) + 1
+                              setFormatQty(String(n))
+                              setMovQty(String(n * movFormat.poids))
+                              if (movSheet.mode === 'reception') setMovPrice(String((n * parseFloat(movFormat.prix)).toFixed(2)))
+                            }}
+                            style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'white', fontSize: '1.3rem', fontWeight: 800, cursor: 'pointer', color: 'var(--outside-dark)' }}>+</button>
+                          <div style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
+                            = <strong style={{ color: movSheet.mode === 'reception' ? 'var(--outside-green)' : 'var(--outside-amber)' }}>{parseInt(formatQty||1) * movFormat.poids} {movSheet.item.unit}</strong>
+                            {movSheet.mode === 'reception' && (
+                              <div style={{ fontSize: '0.72rem' }}>{(parseInt(formatQty||1) * parseFloat(movFormat.prix)).toFixed(2)} DT</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

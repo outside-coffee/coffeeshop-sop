@@ -75,6 +75,7 @@ export default function Ecarts() {
     // 3. Matières premières
     const { data: mp } = await supabase.from('matiere_premiere')
       .select('matiere, unite, prix, quantite')
+      .or('actif.eq.true,actif.is.null')
 
     if (!ventes || !compoAll || !mp) { setLoading(false); return }
 
@@ -137,6 +138,7 @@ export default function Ecarts() {
 
     const list = Object.entries(consoMap)
       .filter(([, v]) => v.qte > 0.01)
+      .filter(([matiere]) => mpMap[matiere] !== undefined) // exclure matières inactives (absentes de mpMap)
       .map(([matiere, v]) => ({
         matiere,
         unite:        v.unite || mpMap[matiere]?.unite || '—',

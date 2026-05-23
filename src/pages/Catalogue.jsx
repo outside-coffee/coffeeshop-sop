@@ -17,14 +17,17 @@ function MatieresTab() {
   const [saving, setSaving]     = useState(false)
   const [expanded, setExpanded] = useState(null)
   const [fmtModal, setFmtModal] = useState(null) // { matiere, format? }
-  const [fmtSaving, setFmtSaving] = useState(false)
+  const [fmtSaving, setFmtSaving]           = useState(false)
+  const [showInactive, setShowInactive]         = useState(false)
+  const [activeCategory, setActiveCategory]     = useState('all')
+  const [formatsModal, setFormatsModal]         = useState(null)
 
   useEffect(() => { fetchItems() }, [])
 
   async function fetchItems() {
     const [{ data: mp }, { data: fmt }] = await Promise.all([
       supabase.from('matiere_premiere').select('*').order('matiere'),
-      supabase.from('matiere_formats').select('*').eq('actif', true).order('contenance'),
+      supabase.from('matiere_formats').select('*').eq('actif', true).order('poids'),
     ])
     setItems(mp || [])
     setFormats(fmt || [])
@@ -66,7 +69,16 @@ function MatieresTab() {
     setItems(prev => prev.filter(i => i.id !== id))
   }
 
-  const filtered = items.filter(i => !search || i.matiere.toLowerCase().includes(search.toLowerCase()))
+  async function toggleActive(item) {
+    const newVal = item.actif === false ? true : false
+    await supabase.from('matiere_premiere').update({ actif: newVal }).eq('id', item.id)
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, actif: newVal } : i))
+  }
+
+  const filtered = items
+    .filter(i => showInactive ? i.actif === false : i.actif !== false)
+    .filter(i => activeCategory === 'all' || i.categorie === activeCategory)
+    .filter(i => !search || i.matiere.toLowerCase().includes(search.toLowerCase()))
 
   return (
     <>
@@ -75,8 +87,26 @@ function MatieresTab() {
           <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
           <input className="form-input" style={{ paddingLeft: 36 }} placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <button className={`btn btn-sm ${showInactive ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setShowInactive(v => !v)}>
+          {showInactive ? '✓ Actives' : '✕ Inactives'}
+        </button>
         {isManager && <button className="btn btn-primary btn-sm" onClick={() => { setEdit(null); setModal(true) }}><Plus size={14} /></button>}
       </div>
+
+      {/* Filtre catégorie */}
+      {!loading && (
+        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: 4, marginBottom: '0.75rem', scrollbarWidth: 'none', marginLeft: '-1rem', marginRight: '-1rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
+          {['all', ...Array.from(new Set(items.map(i => i.categorie).filter(Boolean))).sort()].map(cat => (
+            <button key={cat}
+              className={`btn btn-sm ${activeCategory === cat ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setActiveCategory(cat)}
+              style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+              {cat === 'all' ? 'Tout' : cat}
+            </button>
+          ))}
+        </div>
+      )}
 
       {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Spinner size={24} /></div> : (
         <div className="card">
@@ -91,7 +121,7 @@ function MatieresTab() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 70px 70px 28px', gap: 8, padding: '0.7rem 1rem', borderBottom: (!isOpen && idx < filtered.length-1) ? '1.5px solid var(--outside-cream)' : 'none', alignItems: 'center', cursor: 'pointer' }}
                   onClick={() => setExpanded(isOpen ? null : item.matiere)}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{item.matiere}</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.875rem', color: item.actif === false ? 'var(--muted)' : 'inherit', textDecoration: item.actif === false ? 'line-through' : 'none', opacity: item.actif === false ? 0.5 : 1 }}>{item.matiere}</div>
                     {itemFormats.length > 0 && (
                       <div style={{ fontSize: '0.65rem', color: 'var(--outside-orange)', fontWeight: 700, marginTop: 1 }}>{itemFormats.length} format{itemFormats.length > 1 ? 's' : ''}</div>
                     )}
@@ -103,7 +133,12 @@ function MatieresTab() {
                     {isManager && (
                       <>
                         <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--muted)', padding: 2 }} onClick={e => { e.stopPropagation(); setEdit(item); setModal(true) }}><Edit2 size={11} /></button>
-                        <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--danger)', padding: 2 }} onClick={e => { e.stopPropagation(); deleteItem(item.id) }}><Trash2 size={11} /></button>
+                        <button className="btn btn-ghost btn-icon btn-sm"
+                        style={{ color: item.actif === false ? 'var(--outside-green)' : 'var(--danger)', padding: 2 }}
+                        title={item.actif === false ? 'Réactiver' : 'Désactiver'}
+                        onClick={e => { e.stopPropagation(); toggleActive(item) }}>
+                        {item.actif === false ? '✓' : '✕'}
+                      </button>
                       </>
                     )}
                   </div>
@@ -120,11 +155,11 @@ function MatieresTab() {
                     {itemFormats.map(fmt => (
                       <div key={fmt.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', background: 'white', borderRadius: 'var(--radius-sm)', marginBottom: 4 }}>
                         <div style={{ flex: 1 }}>
-                          <span style={{ fontWeight: 700, fontSize: '0.82rem' }}>{fmt.format_nom}</span>
-                          <span style={{ color: 'var(--muted)', fontSize: '0.75rem', marginLeft: 8 }}>{fmt.contenance} {fmt.unite}</span>
+                          <span style={{ fontWeight: 700, fontSize: '0.82rem' }}>{fmt.label}</span>
+                          <span style={{ color: 'var(--muted)', fontSize: '0.75rem', marginLeft: 8 }}>{fmt.poids} {matiere?.unite || ""}</span>
                         </div>
-                        <span style={{ fontWeight: 800, fontSize: '0.82rem', color: 'var(--outside-dark)' }}>{fmt.prix_achat} DT</span>
-                        <span style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>{(fmt.prix_achat / fmt.contenance).toFixed(4)} DT/{fmt.unite}</span>
+                        <span style={{ fontWeight: 800, fontSize: '0.82rem', color: 'var(--outside-dark)' }}>{parseFloat(fmt.prix).toFixed(2)} DT</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>{fmt.poids > 0 ? (parseFloat(fmt.prix) / parseFloat(fmt.poids)).toFixed(4) : '—'} DT/{matiere?.unite || ""}</span>
                         {isManager && (
                           <div style={{ display: 'flex', gap: 2 }}>
                             <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--muted)', padding: 2 }} onClick={() => setFmtModal({ matiere: item.matiere, format: fmt })}><Edit2 size={11} /></button>
@@ -161,33 +196,33 @@ function FormatModal({ matiere, format, onClose, onSave, saving }) {
   const [form, setForm] = useState({
     id:         format?.id || null,
     matiere,
-    format_nom: format?.format_nom || '',
-    contenance: format?.contenance || '',
+    label: format?.label || '',
+    poids: format?.poids || '',
     unite:      format?.unite || 'g',
-    prix_achat: format?.prix_achat || '',
+    prix: format?.prix || '',
     actif:      true,
   })
   const set = (k,v) => setForm(p => ({ ...p, [k]: v }))
-  const prixUnit = form.prix_achat && form.contenance ? (form.prix_achat / form.contenance).toFixed(4) : '—'
+  const prixUnit = form.prix && form.poids ? (parseFloat(form.prix)/parseFloat(form.poids)).toFixed(4) : '—'
   return (
     <Modal open onClose={onClose} title={format ? 'Modifier le format' : 'Nouveau format'}
       footer={<>
         <button className="btn btn-outline" onClick={onClose}>Annuler</button>
-        <button className="btn btn-primary" disabled={!form.format_nom || !form.contenance || !form.prix_achat || saving}
+        <button className="btn btn-primary" disabled={!form.label || !form.poids || !form.prix || saving}
           onClick={() => onSave(form)}>
           {saving ? <Spinner size={16} /> : <Save size={15} />} Enregistrer
         </button>
       </>}>
       <div style={{ fontSize: '0.75rem', color: 'var(--outside-orange)', fontWeight: 700, marginBottom: '0.75rem' }}>{matiere}</div>
-      <div className="form-group"><label className="form-label">Nom du format</label><input className="form-input" value={form.format_nom} onChange={e => set('format_nom', e.target.value)} placeholder="ex: Nestle 395g" autoFocus /></div>
+      <div className="form-group"><label className="form-label">Nom du format</label><input className="form-input" value={form.label} onChange={e => set('label', e.target.value)} placeholder="ex: Nestle 395g" autoFocus /></div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
-        <div className="form-group"><label className="form-label">Contenance</label><input className="form-input" type="number" step="0.1" value={form.contenance} onChange={e => set('contenance', parseFloat(e.target.value))} placeholder="ex: 395" /></div>
+        <div className="form-group"><label className="form-label">Contenance</label><input className="form-input" type="number" step="0.1" value={form.poids} onChange={e => set('poids', parseFloat(e.target.value))} placeholder="ex: 395" /></div>
         <div className="form-group"><label className="form-label">Unité</label>
           <select className="form-select" value={form.unite} onChange={e => set('unite', e.target.value)}>
             {['g','kg','ml','L','unite'].map(u => <option key={u}>{u}</option>)}
           </select>
         </div>
-        <div className="form-group"><label className="form-label">Prix (DT)</label><input className="form-input" type="number" step="0.01" value={form.prix_achat} onChange={e => set('prix_achat', parseFloat(e.target.value))} placeholder="ex: 3.10" /></div>
+        <div className="form-group"><label className="form-label">Prix (DT)</label><input className="form-input" type="number" step="0.01" value={form.prix} onChange={e => set('prix', parseFloat(e.target.value))} placeholder="ex: 3.10" /></div>
       </div>
       <div style={{ background: 'var(--outside-cream)', borderRadius: 'var(--radius-md)', padding: '8px 12px', fontSize: '0.8rem', color: 'var(--muted)' }}>
         Prix unitaire : <strong style={{ color: 'var(--ink)' }}>{prixUnit} DT/{form.unite}</strong>
@@ -277,7 +312,7 @@ function FormatsModal({ matiere, onClose }) {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem', marginBottom: '0.6rem' }}>
                 <div>
                   <label className="form-label" style={{ fontSize: '0.68rem' }}>Poids ({matiere.unite})</label>
-                  <input className="form-input" type="number" placeholder="ex: 395" value={form.poids} onChange={e => set('quantite', e.target.value)} />
+                  <input className="form-input" type="number" placeholder="ex: 395" value={form.poids} onChange={e => set('poids', e.target.value)} />
                 </div>
                 <div>
                   <label className="form-label" style={{ fontSize: '0.68rem' }}>Prix (DT)</label>
@@ -302,18 +337,36 @@ function FormatsModal({ matiere, onClose }) {
   )
 }
 
+const CATEGORIES_MP = ['Cafe','Lait','Sucre','Pate a tartiner','Biscuit','Sirop','Topping','Eau','Jus','Soda','Fruit frais','Glace','Emballage','Nettoyage','Autre']
+
 function MatiereModal({ item, onClose, onSave, saving }) {
-  const [form, setForm] = useState({ id: item?.id, matiere: item?.matiere || '', unite: item?.unite || 'g', quantite: item?.quantite || 1000, prix: item?.prix || '' })
+  const [form, setForm] = useState({
+    id:        item?.id,
+    matiere:   item?.matiere   || '',
+    code:      item?.code      || '',
+    categorie: item?.categorie || 'Autre',
+    unite:     item?.unite     || 'g',
+    quantite:  item?.quantite  || 1000,
+    prix:      item?.prix      || '',
+  })
   const set = (k,v) => setForm(p => ({ ...p, [k]: v }))
   return (
     <Modal open onClose={onClose} title={item ? 'Modifier' : 'Nouvelle matière'}
       footer={<>
         <button className="btn btn-outline" onClick={onClose}>Annuler</button>
-        <button className="btn btn-primary" disabled={!form.matiere || saving} onClick={() => onSave(form)}>
+        <button className="btn btn-primary" disabled={!form.matiere || !form.code || saving} onClick={() => onSave(form)}>
           {saving ? <Spinner size={16} /> : <Save size={15} />} Enregistrer
         </button>
       </>}>
-      <div className="form-group"><label className="form-label">Nom de la matière</label><input className="form-input" value={form.matiere} onChange={e => set('matiere', e.target.value)} autoFocus /></div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+        <div className="form-group"><label className="form-label">Nom de la matière</label><input className="form-input" value={form.matiere} onChange={e => set('matiere', e.target.value)} autoFocus /></div>
+        <div className="form-group"><label className="form-label">Code</label><input className="form-input" value={form.code} onChange={e => set('code', e.target.value.toUpperCase())} placeholder="ex: CAFE_GRN" /></div>
+      </div>
+      <div className="form-group"><label className="form-label">Catégorie</label>
+        <select className="form-select" value={form.categorie} onChange={e => set('categorie', e.target.value)}>
+          {CATEGORIES_MP.map(c => <option key={c}>{c}</option>)}
+        </select>
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
         <div className="form-group"><label className="form-label">Unité</label>
           <select className="form-select" value={form.unite} onChange={e => set('unite', e.target.value)}>
@@ -496,7 +549,7 @@ function CompoModal({ line, matieres, onClose, onSave, saving }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
         <div className="form-group"><label className="form-label">Quantité</label><input className="form-input" type="number" step="0.1" value={form.quantite_m} onChange={e => set('quantite_m', e.target.value)} /></div>
         <div className="form-group"><label className="form-label">Unité</label><input className="form-input" value={form.unite} onChange={e => set('unite', e.target.value)} /></div>
-        <div className="form-group"><label className="form-label">Prix (DT)</label><input className="form-input" type="number" step="0.0001" value={form.prix_achat} onChange={e => set('prix_achat', e.target.value)} /></div>
+        <div className="form-group"><label className="form-label">Prix (DT)</label><input className="form-input" type="number" step="0.0001" value={form.prix} onChange={e => set('prix', e.target.value)} /></div>
       </div>
     </Modal>
   )
@@ -512,7 +565,8 @@ function ProduitsTab() {
   const [activeF, setActiveF]   = useState('all')
   const [modal, setModal]       = useState(false)
   const [edit, setEdit]         = useState(null)
-  const [saving, setSaving]     = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [showInactive, setShowInactive] = useState(false)
 
   useEffect(() => { fetchProduits() }, [])
 
@@ -540,8 +594,15 @@ function ProduitsTab() {
     setProduits(prev => prev.filter(p => p.id_produit !== id))
   }
 
+  async function toggleProduitActive(p) {
+    const newVal = p.actif === false ? true : false
+    await supabase.from('produits').update({ actif: newVal }).eq('id_produit', p.id_produit)
+    setProduits(prev => prev.map(x => x.id_produit === p.id_produit ? { ...x, actif: newVal } : x))
+  }
+
   const familles = ['all', ...Array.from(new Set(produits.map(p => p.famille))).filter(Boolean).sort()]
   const filtered = produits
+    .filter(p => showInactive ? p.actif === false : p.actif !== false)
     .filter(p => activeF === 'all' || p.famille === activeF)
     .filter(p => !search || p.nom_produit.toLowerCase().includes(search.toLowerCase()))
 
@@ -571,16 +632,21 @@ function ProduitsTab() {
           </div>
           {filtered.map((p, idx) => (
             <div key={p.id_produit} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 70px', gap: 8, padding: '0.7rem 1rem', borderBottom: idx < filtered.length-1 ? '1.5px solid var(--outside-cream)' : 'none', alignItems: 'center' }}>
-              <div style={{ fontWeight: 700, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nom_produit}</div>
+              <div style={{ fontWeight: 700, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: p.actif === false ? 0.4 : 1, textDecoration: p.actif === false ? 'line-through' : 'none' }}>{p.nom_produit}</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--outside-orange)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.famille}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <span style={{ fontSize: '0.82rem', fontWeight: 800 }}>{p.prix} DT</span>
-                {isManager && (
-                  <div style={{ display: 'flex', gap: 2, marginLeft: 'auto' }}>
-                    <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--muted)' }} onClick={() => { setEdit(p); setModal(true) }}><Edit2 size={12} /></button>
-                    <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--danger)' }} onClick={() => deleteProduit(p.id_produit)}><Trash2 size={12} /></button>
-                  </div>
-                )}
+              <div style={{ display: 'flex', gap: 2, marginLeft: 'auto' }}>
+                {isManager && <>
+                  <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--muted)' }} onClick={() => { setEdit(p); setModal(true) }}><Edit2 size={12} /></button>
+                  <button className="btn btn-ghost btn-icon btn-sm"
+                    style={{ color: p.actif === false ? 'var(--outside-green)' : 'var(--danger)' }}
+                    title={p.actif === false ? 'Réactiver' : 'Désactiver'}
+                    onClick={() => toggleProduitActive(p)}>
+                    {p.actif === false ? '✓' : '✕'}
+                  </button>
+                </>}
+              </div>
               </div>
             </div>
           ))}
