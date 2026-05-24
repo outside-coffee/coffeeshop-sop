@@ -11,10 +11,11 @@ import { Avatar } from './UI'
 
 // ── BOTTOM NAV MOBILE (4 items max) ─────────────────────────────────────
 const PRIMARY_NAV = [
-  { to: '/',          icon: BarChart2,   label: 'Dashboard', minRole: 'barista' },
-  { to: '/ouverture', icon: CheckSquare, label: 'Ouverture', minRole: 'barista' },
-  { to: '/rapport',   icon: Coffee,      label: 'Shift',     minRole: 'barista' },
-  { to: '/fermeture', icon: CheckSquare, label: 'Fermeture', minRole: 'barista' },
+  { to: '/',            icon: BarChart2,   label: 'Dashboard',  minRole: 'barista' },
+  { to: '/ouverture',   icon: CheckSquare, label: 'Ouverture',  minRole: 'barista' },
+  { to: '/shift-matin', icon: CheckSquare, label: 'Fin matin',  minRole: 'barista' },
+  { to: '/rapport',     icon: Coffee,      label: 'Shift',      minRole: 'barista' },
+  { to: '/fermeture',   icon: CheckSquare, label: 'Fermeture',  minRole: 'barista' },
 ]
 
 // ── MENU "PLUS" — organisé par sections ──────────────────────────────────
