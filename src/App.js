@@ -17,6 +17,7 @@ import ChecklistAdmin from './pages/ChecklistAdmin'
 import AdminTasks from './pages/ChecklistAdmin2'
 import Staff from './pages/Staff'
 import Factures from './pages/Factures'
+import Finance from './pages/Finance'
 import Catalogue from './pages/Catalogue'
 import { Spinner } from './components/UI'
 
@@ -49,6 +50,7 @@ function ProtectedLayout() {
           <Route path="/admin-tasks" element={<AdminTasks />} />
           <Route path="/staff" element={<Staff />} />
           <Route path="/factures" element={<Factures />} />
+          <Route path="/finance" element={<Finance />} />
           <Route path="/catalogue" element={<Catalogue />} />
           <Route path="/performance" element={<Performance />} />
         </Routes>

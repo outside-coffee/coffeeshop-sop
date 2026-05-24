@@ -2,7 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 import {
   BarChart2, CheckSquare, Coffee, Package,
-  BookOpen, Star, Users, LogOut, MoreHorizontal, X, Shield, TrendingUp, ListChecks, Award, ClipboardList, UsersRound, Receipt, Database
+  BookOpen, Star, Users, LogOut, MoreHorizontal, X, Shield, TrendingUp, ListChecks, Award, ClipboardList, UsersRound, Receipt, Wallet, Database
 } from 'lucide-react'
 import { useAuth, hasRole } from '../hooks/useAuth'
 import { Avatar } from './UI'
@@ -25,6 +25,7 @@ const MORE_NAV = [
   { to: '/admin-tasks',      icon: ClipboardList, label: 'Taches admin', minRole: 'manager' },
   { to: '/staff',              icon: UsersRound,    label: 'Staff',        minRole: 'manager' },
   { to: '/factures',           icon: Receipt,       label: 'Factures',     minRole: 'manager' },
+  { to: '/finance',            icon: Wallet,        label: 'Finance',      minRole: 'manager' },
   { to: '/catalogue',          icon: Database,      label: 'Catalogue',    minRole: 'manager' },
 ]
 
@@ -43,6 +44,7 @@ const ALL_NAV = [
   { to: '/admin-tasks',      icon: ClipboardList, label: 'Taches admin', section: null, minRole: 'manager' },
   { to: '/staff',              icon: UsersRound,    label: 'Staff',        section: null, minRole: 'manager' },
   { to: '/factures',           icon: Receipt,       label: 'Factures',     section: null, minRole: 'manager' },
+  { to: '/finance',            icon: Wallet,        label: 'Finance',      section: null, minRole: 'manager' },
   { to: '/catalogue',          icon: Database,      label: 'Catalogue',    section: null, minRole: 'manager' },
 ]
 
