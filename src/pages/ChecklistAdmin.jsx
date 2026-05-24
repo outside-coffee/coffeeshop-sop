@@ -105,12 +105,11 @@ export default function ChecklistAdmin() {
 
         {/* TABS */}
         <div className="tabs" style={{ marginBottom: '1.25rem' }}>
-          <button className={`tab-btn${type === 'opening' ? ' active' : ''}`} onClick={() => setType('opening')}>
-            ☀️ Ouverture
-          </button>
-          <button className={`tab-btn${type === 'closing' ? ' active' : ''}`} onClick={() => setType('closing')}>
-            🌙 Fermeture
-          </button>
+          {TYPES.map(t => (
+            <button key={t.value} className={`tab-btn${type === t.value ? ' active' : ''}`} onClick={() => setType(t.value)}>
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {loading ? (
