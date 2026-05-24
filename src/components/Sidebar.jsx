@@ -14,7 +14,6 @@ const PRIMARY_NAV = [
   { to: '/',            icon: BarChart2,   label: 'Dashboard',  minRole: 'barista' },
   { to: '/ouverture',   icon: CheckSquare, label: 'Ouverture',  minRole: 'barista' },
   { to: '/shift-matin', icon: CheckSquare, label: 'Fin matin',  minRole: 'barista' },
-  { to: '/rapport',     icon: Coffee,      label: 'Shift',      minRole: 'barista' },
   { to: '/fermeture',   icon: CheckSquare, label: 'Fermeture',  minRole: 'barista' },
 ]
 
@@ -24,7 +23,7 @@ const MORE_SECTIONS = [
     label: 'Opérationnel',
     minRole: 'barista',
     items: [
-      { to: '/shift-matin', icon: CheckSquare,  label: 'Fin shift matin', minRole: 'barista' },
+      { to: '/rapport',     icon: Coffee,       label: 'Rapport shift',   minRole: 'barista' },
       { to: '/stock',       icon: Package,      label: 'Stock',           minRole: 'barista' },
       { to: '/recettes',    icon: BookOpen,     label: 'Recettes',        minRole: 'barista' },
       { to: '/standards',   icon: Star,         label: 'Standards',       minRole: 'barista' },
