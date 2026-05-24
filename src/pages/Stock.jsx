@@ -59,30 +59,25 @@ export default function Stock() {
       supabase.from('stock_items').select('*').eq('active', true).order('category').order('name'),
       supabase.from('matiere_premiere').select('matiere, prix, quantite, unite, actif'),
     ])
-    // Map des matières actives
-    const mpMap = {}
-    const mpActif = new Set()
+    // Map des matières — séparation actives/inactives
+    const mpPrixMap  = {}  // matiere → prix unitaire
+    const mpInactif  = new Set()  // matières désactivées dans Catalogue
     for (const m of (mp || [])) {
-      mpMap[m.matiere] = m.quantite > 0 ? parseFloat(m.prix||0) / parseFloat(m.quantite) : null
-      if (m.actif !== false) mpActif.add(m.matiere)
+      mpPrixMap[m.matiere] = m.quantite > 0 ? parseFloat(m.prix||0) / parseFloat(m.quantite) : null
+      if (m.actif === false) mpInactif.add(m.matiere)
     }
-    // Identifier les liens cassés et les items actifs
-    const liensCasses = []
+
+    // Exclure les stock_items dont la matière est désactivée dans Catalogue
     const enriched = (si || [])
       .filter(item => {
-        if (item.matiere_ref && !mpMap.hasOwnProperty(item.matiere_ref) && !mpActif.has(item.matiere_ref)) {
-          liensCasses.push(item.name)
-          return false // exclure si matière inactive
-        }
+        if (item.matiere_ref && mpInactif.has(item.matiere_ref)) return false
         return true
       })
       .map(item => ({
         ...item,
-        prixUnitaire: item.matiere_ref ? (mpMap[item.matiere_ref] || null) : null,
-        lienCasse: item.matiere_ref && !mpMap.hasOwnProperty(item.matiere_ref) ? true : false,
+        prixUnitaire: item.matiere_ref ? (mpPrixMap[item.matiere_ref] || null) : null,
       }))
     setItems(enriched)
-    if (liensCasses.length > 0) console.warn('Stock — liens matière cassés:', liensCasses)
     setLoading(false)
   }
 
