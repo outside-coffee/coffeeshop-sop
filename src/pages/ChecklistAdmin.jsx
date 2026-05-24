@@ -7,6 +7,12 @@ import { Spinner, Modal } from '../components/UI'
 export default function ChecklistAdmin() {
   const { profile } = useAuth()
   const [type, setType]         = useState('opening')
+  // Types disponibles
+  const TYPES = [
+    { value: 'opening',            label: 'Ouverture' },
+    { value: 'closing',            label: 'Fermeture' },
+    { value: 'shift_end_morning',  label: 'Fin shift matin' },
+  ]
   const [templates, setTemplates] = useState([])
   const [loading, setLoading]   = useState(true)
   const [modal, setModal]       = useState(false)
