@@ -119,13 +119,27 @@ function TabResultat({ period, isAdmin }) {
     const dateFrom = `${period}-01`
     const dateTo   = new Date(parseInt(y), parseInt(m), 0).toISOString().slice(0, 10)
 
-    // CA depuis transaction_line
-    const { data: ventes } = await supabase
-      .from('transaction_line')
-      .select('total_ttc')
-      .gte('date_vente', dateFrom)
-      .lte('date_vente', dateTo)
-    const ca = (ventes || []).reduce((s, v) => s + parseFloat(v.total_ttc || 0), 0)
+    // CA depuis transaction_line — même logique que Performance
+    // prix_unitaire avec fallback total_ttc, toutes tables incluses
+    const DATE_CHG = '2026-03-19'
+    let ventesCA = [], pageCA = 0
+    while (true) {
+      const { data: batch } = await supabase
+        .from('transaction_line').select('prix_unitaire, total_ttc, numtable, date_vente')
+        .gte('date_vente', dateFrom).lte('date_vente', dateTo)
+        .range(pageCA * 1000, (pageCA + 1) * 1000 - 1)
+      if (!batch || batch.length === 0) break
+      // Même filtre que Performance (exclure conso perso)
+      const filtered = batch.filter(l => {
+        if (l.numtable === 32) return false
+        if (l.numtable === 22 && l.date_vente < DATE_CHG) return false
+        return true
+      })
+      ventesCA = ventesCA.concat(filtered)
+      if (batch.length < 1000) break
+      pageCA++
+    }
+    const ca = ventesCA.reduce((s, v) => s + parseFloat(v.prix_unitaire || v.total_ttc || 0), 0)
 
     // Charges
     const { data: charges } = await supabase
@@ -191,6 +205,8 @@ function TabResultat({ period, isAdmin }) {
       }
 
       // Calculer le coût théorique
+      // prix_achat dans composition_produit = coût déjà calculé pour quantite_m
+      // Donc : coût total = qte_vendue × prix_achat
       for (const v of ventesFC) {
         const prodKey = norm(v.produit)
         const ingredients = produitMap[prodKey] || []
@@ -198,16 +214,18 @@ function TabResultat({ period, isAdmin }) {
           const matiereNorm = norm(c.matiere)
           const baseKey = Object.keys(baseMap).find(k => k === matiereNorm)
           if (baseKey) {
+            // Ingrédient = base → développer avec ratio
             const baseIngredients = baseMap[baseKey]
             const baseTotal = baseIngredients.reduce((s, bi) => s + parseFloat(bi.quantite_m || 0), 0)
             const ratio = baseTotal > 0 ? parseFloat(c.quantite_m) / baseTotal : 0
             for (const bi of baseIngredients) {
-              const prixUnit = parseFloat(bi.prix_achat || mpMap[bi.matiere]?.prixParUnite || 0)
-              foodCostTheo += v.qte * ratio * parseFloat(bi.quantite_m) * prixUnit
+              // bi.prix_achat = coût pour bi.quantite_m → coût unitaire = prix_achat
+              const prixUnit = parseFloat(bi.prix_achat || 0) || (mpMap[bi.matiere]?.prixParUnite * parseFloat(bi.quantite_m || 0))
+              foodCostTheo += v.qte * ratio * (prixUnit / parseFloat(bi.quantite_m || 1)) * parseFloat(bi.quantite_m || 0)
             }
           } else {
-            const prixUnit = parseFloat(c.prix_achat || mpMap[c.matiere]?.prixParUnite || 0)
-            foodCostTheo += v.qte * parseFloat(c.quantite_m || 0) * prixUnit
+            // Ingrédient direct : prix_achat = coût pour quantite_m de ce produit
+            foodCostTheo += v.qte * parseFloat(c.prix_achat || 0)
           }
         }
       }
