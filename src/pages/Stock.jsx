@@ -308,7 +308,7 @@ export default function Stock() {
       {movSheet && (
         <>
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(29,58,58,0.45)', zIndex: 500, backdropFilter: 'blur(2px)' }} onClick={() => setMovSheet(null)} />
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: '1.25rem', zIndex: 600, boxShadow: 'var(--shadow-lg)', maxWidth: 560, margin: '0 auto' }}>
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: '1.25rem', zIndex: 600, boxShadow: 'var(--shadow-lg)', maxWidth: 560, margin: '0 auto', maxHeight: '92dvh', overflowY: 'auto' }}>
 
             {/* HANDLE */}
             <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--outside-cream2)', margin: '0 auto 1rem' }} />
@@ -509,7 +509,7 @@ export default function Stock() {
       {seuilItem && (
         <>
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(29,58,58,0.45)', zIndex: 500, backdropFilter: 'blur(2px)' }} onClick={() => setSeuilItem(null)} />
-          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: '1.25rem', zIndex: 600, boxShadow: 'var(--shadow-lg)', maxWidth: 560, margin: '0 auto' }}>
+          <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'white', borderRadius: 'var(--radius-xl) var(--radius-xl) 0 0', padding: '1.25rem', zIndex: 600, boxShadow: 'var(--shadow-lg)', maxWidth: 560, margin: '0 auto', maxHeight: '92dvh', overflowY: 'auto' }}>
             <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--outside-cream2)', margin: '0 auto 1rem' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <div>

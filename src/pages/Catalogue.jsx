@@ -215,7 +215,7 @@ function FormatModal({ matiere, format, onClose, onSave, saving }) {
       </>}>
       <div style={{ fontSize: '0.75rem', color: 'var(--outside-orange)', fontWeight: 700, marginBottom: '0.75rem' }}>{matiere}</div>
       <div className="form-group"><label className="form-label">Nom du format</label><input className="form-input" value={form.label} onChange={e => set('label', e.target.value)} placeholder="ex: Nestle 395g" autoFocus /></div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '0.75rem' }}>
         <div className="form-group"><label className="form-label">Contenance</label><input className="form-input" type="number" step="0.1" value={form.poids} onChange={e => set('poids', parseFloat(e.target.value))} placeholder="ex: 395" /></div>
         <div className="form-group"><label className="form-label">Unité</label>
           <select className="form-select" value={form.unite} onChange={e => set('unite', e.target.value)}>
@@ -367,7 +367,7 @@ function MatiereModal({ item, onClose, onSave, saving }) {
           {CATEGORIES_MP.map(c => <option key={c}>{c}</option>)}
         </select>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '0.75rem' }}>
         <div className="form-group"><label className="form-label">Unité</label>
           <select className="form-select" value={form.unite} onChange={e => set('unite', e.target.value)}>
             {['g','kg','ml','L','unite','Feuilles','bouteille'].map(u => <option key={u}>{u}</option>)}
@@ -546,7 +546,7 @@ function CompoModal({ line, matieres, onClose, onSave, saving }) {
           </select>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(80px, 1fr))', gap: '0.75rem' }}>
         <div className="form-group"><label className="form-label">Quantité</label><input className="form-input" type="number" step="0.1" value={form.quantite_m} onChange={e => set('quantite_m', e.target.value)} /></div>
         <div className="form-group"><label className="form-label">Unité</label><input className="form-input" value={form.unite} onChange={e => set('unite', e.target.value)} /></div>
         <div className="form-group"><label className="form-label">Prix (DT)</label><input className="form-input" type="number" step="0.0001" value={form.prix} onChange={e => set('prix', e.target.value)} /></div>
@@ -627,11 +627,11 @@ function ProduitsTab() {
 
       {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Spinner size={24} /></div> : (
         <div className="card">
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 70px', gap: 8, padding: '0.5rem 1rem', borderBottom: '1.5px solid var(--outside-cream)', background: 'var(--outside-cream)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px,1fr) minmax(80px,120px) 70px', gap: 6, padding: '0.5rem 1rem', borderBottom: '1.5px solid var(--outside-cream)', background: 'var(--outside-cream)' }}>
             {['Produit','Famille','Prix'].map(h => <div key={h} style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>{h}</div>)}
           </div>
           {filtered.map((p, idx) => (
-            <div key={p.id_produit} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 70px', gap: 8, padding: '0.7rem 1rem', borderBottom: idx < filtered.length-1 ? '1.5px solid var(--outside-cream)' : 'none', alignItems: 'center' }}>
+            <div key={p.id_produit} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px,1fr) minmax(80px,120px) 70px', gap: 6, padding: '0.7rem 1rem', borderBottom: idx < filtered.length-1 ? '1.5px solid var(--outside-cream)' : 'none', alignItems: 'center' }}>
               <div style={{ fontWeight: 700, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: p.actif === false ? 0.4 : 1, textDecoration: p.actif === false ? 'line-through' : 'none' }}>{p.nom_produit}</div>
               <div style={{ fontSize: '0.75rem', color: 'var(--outside-orange)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.famille}</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

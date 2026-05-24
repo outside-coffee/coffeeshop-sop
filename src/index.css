@@ -473,7 +473,7 @@ h3 { font-size: 1.1rem; }
 
 .modal-header { padding: 1.25rem 1.25rem 0; display: flex; align-items: flex-start; justify-content: space-between; }
 .modal-body   { padding: 1rem 1.25rem; }
-.modal-footer { padding: 0 1.25rem 1.25rem; display: flex; gap: 8px; justify-content: flex-end; }
+.modal-footer { padding: 0 1.25rem calc(1.25rem + env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 
 /* ── TOAST ───────────────────────────────────────────────────────────────── */
 .toast-container {
