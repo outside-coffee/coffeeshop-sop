@@ -222,7 +222,7 @@ export default function Performance() {
       const k = l.produit
       if (!prodMap[k]) prodMap[k] = { produit: k, famille: l.famille, ca: 0, qte: 0, tickets: new Set(), nbPers: 0 }
       prodMap[k].ca    += l.prixU
-      prodMap[k].qte   += l.qteCalc
+      prodMap[k].qte   += l.qteRaw  // vraie qté vendue pour la vue produit/famille
       prodMap[k].nbPers += l.nbPers
       prodMap[k].tickets.add(l.id_ticket)
     }
