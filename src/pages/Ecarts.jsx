@@ -54,13 +54,12 @@ export default function Ecarts() {
   async function chargerMatieres() {
     setLoading(true)
 
-    // 1. Ventes — pagination pour dépasser la limite 1000 lignes Supabase
+    // 1. Ventes — pagination (toutes tables incluses, conso perso comprise)
     let ventes = [], page = 0
     while (true) {
       const { data: batch } = await supabase
         .from('transaction_line').select('produit, qte')
         .gte('date_vente', dateFrom).lte('date_vente', dateTo)
-        .neq('numtable', 32)
         .range(page * 1000, (page + 1) * 1000 - 1)
       if (!batch || batch.length === 0) break
       ventes = ventes.concat(batch)
