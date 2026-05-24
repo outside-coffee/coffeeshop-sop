@@ -626,7 +626,11 @@ function ProduitsTab() {
       await supabase.from('produits').update(form).eq('id_produit', form.id_produit)
       setProduits(prev => prev.map(p => p.id_produit === form.id_produit ? { ...p, ...form } : p))
     } else {
-      const { data } = await supabase.from('produits').insert(form).select().single()
+      // Générer id_produit depuis le nom (ex: "LATTE CARAMEL" → "LATTE_CARAMEL_001")
+      const base = form.nom_produit.toUpperCase().replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+      const id_produit = base + '_' + Date.now().toString(36).toUpperCase()
+      const { data, error } = await supabase.from('produits').insert({ ...form, id_produit }).select().single()
+      if (error) { alert('Erreur: ' + error.message); setSaving(false); return }
       if (data) setProduits(prev => [...prev, data])
     }
     setSaving(false); setModal(false); setEdit(null)
