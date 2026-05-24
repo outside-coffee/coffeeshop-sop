@@ -11,41 +11,53 @@ const PRIMARY_NAV = [
   { to: '/',          icon: BarChart2,   label: 'Dashboard',  minRole: 'barista' },
   { to: '/ouverture', icon: CheckSquare, label: 'Ouverture',  minRole: 'barista' },
   { to: '/fermeture', icon: CheckSquare, label: 'Fermeture',  minRole: 'barista' },
-  { to: '/rapport',   icon: Coffee,      label: 'Shift',      minRole: 'barista' },
+  { to: '/rapport',     icon: Coffee,      label: 'Shift',       minRole: 'barista' },
+  { to: '/shift-matin', icon: CheckSquare, label: 'Fin matin',   minRole: 'barista' },
 ]
 
 const MORE_NAV = [
-  { to: '/stock',     icon: Package,  label: 'Stock',         minRole: 'barista' },
-  { to: '/recettes',  icon: BookOpen, label: 'Recettes',      minRole: 'barista' },
-  { to: '/standards', icon: Star,     label: 'Standards',     minRole: 'barista' },
-  { to: '/equipe',    icon: Users,    label: 'Equipe',        minRole: 'manager' },
-  { to: '/ecarts',          icon: TrendingUp, label: 'Ecarts',     minRole: 'manager' },
-  { to: '/performance',      icon: Award,       label: 'Performance',  minRole: 'manager' },
-  { to: '/checklist-admin', icon: ListChecks,    label: 'Listes',       minRole: 'admin'   },
-  { to: '/admin-tasks',      icon: ClipboardList, label: 'Taches admin', minRole: 'manager' },
-  { to: '/staff',              icon: UsersRound,    label: 'Staff',        minRole: 'manager' },
-  { to: '/factures',           icon: Receipt,       label: 'Factures',     minRole: 'manager' },
-  { to: '/finance',            icon: Wallet,        label: 'Finance',      minRole: 'manager' },
-  { to: '/catalogue',          icon: Database,      label: 'Catalogue',    minRole: 'manager' },
+  // Opérationnel
+  { to: '/shift-matin',     icon: CheckSquare,  label: 'Fin shift matin', minRole: 'barista', section: 'Opérationnel' },
+  { to: '/stock',           icon: Package,      label: 'Stock',         minRole: 'barista',  section: null },
+  { to: '/recettes',        icon: BookOpen,     label: 'Recettes',      minRole: 'barista',  section: null },
+  { to: '/standards',       icon: Star,         label: 'Standards',     minRole: 'barista',  section: null },
+  // Analyse
+  { to: '/ecarts',          icon: TrendingUp,   label: 'Écarts',        minRole: 'manager',  section: 'Analyse' },
+  { to: '/performance',     icon: Award,        label: 'Performance',   minRole: 'manager',  section: null },
+  { to: '/finance',         icon: Wallet,       label: 'Finance',       minRole: 'manager',  section: null },
+  // Équipe
+  { to: '/equipe',          icon: Users,        label: 'Équipe',        minRole: 'manager',  section: 'Équipe' },
+  { to: '/staff',           icon: UsersRound,   label: 'Staff',         minRole: 'manager',  section: null },
+  { to: '/admin-tasks',     icon: ClipboardList,label: 'Tâches admin',  minRole: 'manager',  section: null },
+  // Administration
+  { to: '/catalogue',       icon: Database,     label: 'Catalogue',     minRole: 'manager',  section: 'Administration' },
+  { to: '/factures',        icon: Receipt,      label: 'Factures',      minRole: 'manager',  section: null },
+  { to: '/checklist-admin', icon: ListChecks,   label: 'Listes',        minRole: 'admin',    section: null },
 ]
 
 const ALL_NAV = [
-  { to: '/',          icon: BarChart2,   label: 'Dashboard',  section: "Vue d'ensemble", minRole: 'barista' },
-  { to: '/ouverture', icon: CheckSquare, label: 'Ouverture',  section: 'Operations',     minRole: 'barista' },
-  { to: '/fermeture', icon: CheckSquare, label: 'Fermeture',  section: null,             minRole: 'barista' },
-  { to: '/rapport',   icon: Coffee,      label: 'Rapport shift', section: null,           minRole: 'barista' },
-  { to: '/stock',     icon: Package,     label: 'Stock',      section: null,             minRole: 'barista' },
-  { to: '/recettes',  icon: BookOpen,    label: 'Recettes',   section: null,             minRole: 'barista' },
-  { to: '/standards', icon: Star,        label: 'Standards',  section: null,             minRole: 'barista' },
-  { to: '/equipe',    icon: Users,       label: 'Equipe',     section: 'Gestion',        minRole: 'manager' },
-  { to: '/ecarts',          icon: TrendingUp, label: 'Ecarts',    section: null,          minRole: 'manager' },
-  { to: '/performance',      icon: Award,       label: 'Performance',  section: null, minRole: 'manager' },
-  { to: '/checklist-admin', icon: ListChecks,    label: 'Listes',       section: null, minRole: 'admin'   },
-  { to: '/admin-tasks',      icon: ClipboardList, label: 'Taches admin', section: null, minRole: 'manager' },
-  { to: '/staff',              icon: UsersRound,    label: 'Staff',        section: null, minRole: 'manager' },
-  { to: '/factures',           icon: Receipt,       label: 'Factures',     section: null, minRole: 'manager' },
-  { to: '/finance',            icon: Wallet,        label: 'Finance',      section: null, minRole: 'manager' },
-  { to: '/catalogue',          icon: Database,      label: 'Catalogue',    section: null, minRole: 'manager' },
+  // Vue d'ensemble
+  { to: '/',            icon: BarChart2,    label: 'Dashboard',     section: "Vue d'ensemble", minRole: 'barista'  },
+  // Opérationnel
+  { to: '/ouverture',   icon: CheckSquare,  label: 'Ouverture',     section: 'Opérationnel',   minRole: 'barista'  },
+  { to: '/fermeture',   icon: CheckSquare,  label: 'Fermeture',     section: null,             minRole: 'barista'  },
+  { to: '/rapport',     icon: Coffee,       label: 'Shift',         section: null,             minRole: 'barista'  },
+  { to: '/shift-matin', icon: CheckSquare,  label: 'Fin shift matin', section: null,           minRole: 'barista'  },
+  { to: '/stock',       icon: Package,      label: 'Stock',         section: null,             minRole: 'barista'  },
+  { to: '/recettes',    icon: BookOpen,     label: 'Recettes',      section: null,             minRole: 'barista'  },
+  { to: '/standards',   icon: Star,         label: 'Standards',     section: null,             minRole: 'barista'  },
+  // Analyse
+  { to: '/ecarts',      icon: TrendingUp,   label: 'Écarts',        section: 'Analyse',        minRole: 'manager'  },
+  { to: '/performance', icon: Award,        label: 'Performance',   section: null,             minRole: 'manager'  },
+  { to: '/finance',     icon: Wallet,       label: 'Finance',       section: null,             minRole: 'manager'  },
+  // Équipe
+  { to: '/equipe',      icon: Users,        label: 'Équipe',        section: 'Équipe',         minRole: 'manager'  },
+  { to: '/staff',       icon: UsersRound,   label: 'Staff',         section: null,             minRole: 'manager'  },
+  { to: '/admin-tasks', icon: ClipboardList,label: 'Tâches admin',  section: null,             minRole: 'manager'  },
+  // Administration
+  { to: '/catalogue',       icon: Database,  label: 'Catalogue',    section: 'Administration', minRole: 'manager'  },
+  { to: '/factures',        icon: Receipt,   label: 'Factures',     section: null,             minRole: 'manager'  },
+  { to: '/checklist-admin', icon: ListChecks,label: 'Listes',       section: null,             minRole: 'admin'    },
 ]
 
 const ROLE_STYLES = {

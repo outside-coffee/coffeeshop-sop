@@ -16,8 +16,12 @@ export default function ChecklistPage({ type }) {
   const [validated, setValidated] = useState(false)
 
   const today    = format(new Date(), 'yyyy-MM-dd')
-  const title    = type === 'opening' ? 'Ouverture' : 'Fermeture'
-  const subtitle = type === 'opening' ? 'Taches du matin' : 'Taches de fermeture'
+  const title    = type === 'opening' ? 'Ouverture'
+                 : type === 'shift_end_morning' ? 'Fin de shift matin'
+                 : 'Fermeture'
+  const subtitle = type === 'opening' ? "Tâches d'ouverture — 8h"
+                 : type === 'shift_end_morning' ? 'Passation shift matin → soir — 16h'
+                 : "Tâches de fermeture"
 
   useEffect(() => { fetchData() }, [type])
 

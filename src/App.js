@@ -39,6 +39,7 @@ function ProtectedLayout() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/ouverture" element={<ChecklistPage type="opening" />} />
+          <Route path="/shift-matin" element={<ChecklistPage type="shift_end_morning" />} />
           <Route path="/fermeture" element={<ChecklistPage type="closing" />} />
           <Route path="/rapport" element={<ShiftReport />} />
           <Route path="/stock" element={<Stock />} />
