@@ -71,7 +71,22 @@ function MatieresTab() {
 
   async function toggleActive(item) {
     const newVal = item.actif === false ? true : false
-    await supabase.from('matiere_premiere').update({ actif: newVal }).eq('id', item.id)
+    if (!newVal) {
+      // Vérifier si utilisée en composition avant de désactiver
+      const { count } = await supabase
+        .from('composition_produit')
+        .select('*', { count: 'exact', head: true })
+        .ilike('matiere', item.matiere)
+      if (count > 0) {
+        alert(`Impossible de désactiver "${item.matiere}" : utilisée dans ${count} composition(s).\nRetirez-la des recettes d'abord.`)
+        return
+      }
+    }
+    const { error } = await supabase.from('matiere_premiere').update({ actif: newVal }).eq('id', item.id)
+    if (error) {
+      alert(error.message || 'Erreur lors de la modification')
+      return
+    }
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, actif: newVal } : i))
   }
 
@@ -349,7 +364,18 @@ function MatiereModal({ item, onClose, onSave, saving }) {
     quantite:  item?.quantite  || 1000,
     prix:      item?.prix      || '',
   })
+  const [historique, setHistorique] = useState([])
   const set = (k,v) => setForm(p => ({ ...p, [k]: v }))
+
+  useEffect(() => {
+    if (!item?.matiere) return
+    supabase.from('matiere_prix_historique')
+      .select('prix, quantite, date_effet, note')
+      .eq('matiere', item.matiere)
+      .order('date_effet', { ascending: false })
+      .limit(5)
+      .then(({ data }) => setHistorique(data || []))
+  }, [item?.matiere])
   return (
     <Modal open onClose={onClose} title={item ? 'Modifier' : 'Nouvelle matière'}
       footer={<>
@@ -379,6 +405,24 @@ function MatiereModal({ item, onClose, onSave, saving }) {
       <div style={{ background: 'var(--outside-cream)', borderRadius: 'var(--radius-md)', padding: '8px 12px', fontSize: '0.8rem', color: 'var(--muted)' }}>
         Prix unitaire : <strong style={{ color: 'var(--ink)' }}>{form.prix && form.quantite ? (form.prix/form.quantite).toFixed(4) : '—'} DT/{form.unite}</strong>
       </div>
+
+      {historique.length > 0 && (
+        <div style={{ marginTop: '0.75rem' }}>
+          <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '6px' }}>Historique des prix</div>
+          <div className="card" style={{ padding: 0 }}>
+            {historique.map((h, i) => (
+              <div key={i} style={{ padding: '6px 12px', borderBottom: i < historique.length-1 ? '1px solid var(--outside-cream)' : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <span style={{ fontWeight: 700, fontSize: '0.82rem' }}>{parseFloat(h.prix).toFixed(2)} DT</span>
+                  <span style={{ color: 'var(--muted)', fontSize: '0.72rem', marginLeft: 6 }}>/ {h.quantite} {form.unite}</span>
+                  <span style={{ color: 'var(--outside-green)', fontSize: '0.72rem', marginLeft: 6 }}>→ {h.quantite > 0 ? (h.prix/h.quantite).toFixed(4) : '—'} DT/{form.unite}</span>
+                </div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>{h.date_effet}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </Modal>
   )
 }

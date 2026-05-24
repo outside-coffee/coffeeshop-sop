@@ -66,14 +66,23 @@ export default function Stock() {
       mpMap[m.matiere] = m.quantite > 0 ? parseFloat(m.prix||0) / parseFloat(m.quantite) : null
       if (m.actif !== false) mpActif.add(m.matiere)
     }
-    // Exclure les items dont la matière est désactivée dans Catalogue
+    // Identifier les liens cassés et les items actifs
+    const liensCasses = []
     const enriched = (si || [])
-      .filter(item => !item.matiere_ref || mpActif.has(item.matiere_ref))
+      .filter(item => {
+        if (item.matiere_ref && !mpMap.hasOwnProperty(item.matiere_ref) && !mpActif.has(item.matiere_ref)) {
+          liensCasses.push(item.name)
+          return false // exclure si matière inactive
+        }
+        return true
+      })
       .map(item => ({
         ...item,
         prixUnitaire: item.matiere_ref ? (mpMap[item.matiere_ref] || null) : null,
+        lienCasse: item.matiere_ref && !mpMap.hasOwnProperty(item.matiere_ref) ? true : false,
       }))
     setItems(enriched)
+    if (liensCasses.length > 0) console.warn('Stock — liens matière cassés:', liensCasses)
     setLoading(false)
   }
 
