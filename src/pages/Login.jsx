@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
@@ -8,44 +8,38 @@ export default function LoginPage() {
   const { signIn } = useAuth()
   const navigate   = useNavigate()
 
-  // Mode: 'name' | 'pin' | 'email'
-  const [step, setStep]       = useState('name')
-  const [name, setName]       = useState('')
-  const [pin, setPin]         = useState('')
-  const [email, setEmail]     = useState('')
+  // Mode: 'select' | 'pin' | 'email'
+  const [step, setStep]         = useState('select')
+  const [profiles, setProfiles] = useState([])
+  const [selectedId, setSelectedId] = useState('')
+  const [pin, setPin]           = useState('')
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError]     = useState('')
-  const [profile, setProfile] = useState(null)
+  const [loading, setLoading]   = useState(false)
+  const [loadingProfiles, setLoadingProfiles] = useState(true)
+  const [error, setError]       = useState('')
+  const [profile, setProfile]   = useState(null)
 
-  // Étape 1 — chercher le profil par prénom
-  async function handleName(e) {
-    e.preventDefault()
-    if (!name.trim()) return
-    setLoading(true)
-    setError('')
-
-    const { data } = await supabase
+  useEffect(() => {
+    supabase
       .from('profiles')
-      .select('id, name, role, fake_email, pin_code, avatar_color')
-      .ilike('name', name.trim())
-      .maybeSingle()
+      .select('id, name, role, fake_email, avatar_color')
+      .eq('actif', true)
+      .order('name')
+      .then(({ data }) => {
+        setProfiles(data || [])
+        setLoadingProfiles(false)
+      })
+  }, [])
 
-    if (!data) {
-      setError('Prénom introuvable — contacte le manager')
-      setLoading(false)
-      return
-    }
-
-    setProfile(data)
-
-    // Si pas de fake_email → compte classique email/mdp (admin)
-    if (!data.fake_email) {
-      setStep('email')
-    } else {
-      setStep('pin')
-    }
-    setLoading(false)
+  // Étape 1 — sélectionner un profil dans la liste
+  function handleSelect(e) {
+    e.preventDefault()
+    if (!selectedId) return
+    const found = profiles.find(p => p.id === selectedId)
+    if (!found) return
+    setProfile(found)
+    setStep(found.fake_email ? 'pin' : 'email')
   }
 
   // Connexion PIN
@@ -90,8 +84,8 @@ export default function LoginPage() {
   }
 
   function reset() {
-    setStep('name')
-    setName('')
+    setStep('select')
+    setSelectedId('')
     setPin('')
     setEmail('')
     setPassword('')
@@ -109,22 +103,34 @@ export default function LoginPage() {
           <p>Your Everyday Escape</p>
         </div>
 
-        {/* ÉTAPE 1 — PRÉNOM */}
-        {step === 'name' && (
-          <form onSubmit={handleName}>
+        {/* ÉTAPE 1 — SÉLECTION PROFIL */}
+        {step === 'select' && (
+          <form onSubmit={handleSelect}>
             <div className="form-group">
-              <label className="form-label">Ton prénom</label>
-              <input className="form-input" type="text"
-                placeholder="ex: Sarra"
-                value={name} onChange={e => setName(e.target.value)}
-                autoFocus autoCapitalize="words" required
-                style={{ fontSize: '1.1rem', textAlign: 'center', fontWeight: 700 }} />
+              <label className="form-label">Qui es-tu ?</label>
+              {loadingProfiles ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '1rem' }}>
+                  <Spinner size={20} />
+                </div>
+              ) : (
+                <select
+                  className="form-input"
+                  value={selectedId}
+                  onChange={e => setSelectedId(e.target.value)}
+                  required
+                  style={{ fontSize: '1rem', fontWeight: 700, textAlign: 'center' }}>
+                  <option value="">— Sélectionner —</option>
+                  {profiles.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
             {error && <ErrorBox msg={error} />}
             <button className="btn btn-primary" type="submit"
-              disabled={loading || !name.trim()}
+              disabled={loadingProfiles || !selectedId}
               style={{ width: '100%', justifyContent: 'center', padding: '0.85rem', fontSize: '1rem' }}>
-              {loading ? <Spinner size={18} /> : 'Continuer →'}
+              Continuer →
             </button>
           </form>
         )}
