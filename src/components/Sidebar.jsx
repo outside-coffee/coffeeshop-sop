@@ -41,7 +41,6 @@ const MORE_SECTIONS = [
     label: 'Équipe',
     minRole: 'manager',
     items: [
-      { to: '/equipe',      icon: Users,        label: 'Équipe',         minRole: 'manager' },
       { to: '/staff',       icon: UsersRound,   label: 'Staff',          minRole: 'manager' },
     ]
   },
@@ -51,6 +50,7 @@ const MORE_SECTIONS = [
     items: [
       { to: '/finance',         icon: Wallet,       label: 'Finance',          minRole: 'manager' },
       { to: '/admin-tasks',     icon: ClipboardList,label: 'Tâches admin',     minRole: 'manager' },
+      { to: '/equipe',          icon: Users,        label: 'Comptes équipe',   minRole: 'admin'   },
       { to: '/catalogue',       icon: Database,     label: 'Catalogue',        minRole: 'manager' },
       { to: '/factures',        icon: Receipt,      label: 'Factures',         minRole: 'manager' },
       { to: '/checklist-admin', icon: ListChecks,   label: 'Gérer les listes', minRole: 'admin'   },
@@ -70,8 +70,8 @@ const ALL_NAV = [
   { to: '/standards',   icon: Star,         label: 'Standards',      section: null,             minRole: 'barista'  },
   { to: '/ecarts',      icon: TrendingUp,   label: 'Écarts',           section: 'Analyse',        minRole: 'manager'  },
   { to: '/performance', icon: Award,        label: 'Performance',      section: null,             minRole: 'manager'  },
-  { to: '/equipe',      icon: Users,        label: 'Équipe',           section: 'Équipe',         minRole: 'manager'  },
-  { to: '/staff',       icon: UsersRound,   label: 'Staff',            section: null,             minRole: 'manager'  },
+  { to: '/equipe',      icon: Users,        label: 'Comptes équipe',   section: 'Administration', minRole: 'admin'    },
+  { to: '/staff',       icon: UsersRound,   label: 'Staff',            section: 'Équipe',         minRole: 'manager'  },
   { to: '/finance',         icon: Wallet,       label: 'Finance',          section: 'Administration', minRole: 'manager'  },
   { to: '/admin-tasks',     icon: ClipboardList,label: 'Tâches admin',     section: null,             minRole: 'manager'  },
   { to: '/catalogue',       icon: Database,     label: 'Catalogue',        section: null,             minRole: 'manager'  },

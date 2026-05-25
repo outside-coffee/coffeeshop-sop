@@ -611,28 +611,58 @@ function ProduitsTab() {
   const [edit, setEdit]         = useState(null)
   const [saving, setSaving]       = useState(false)
   const [showInactive, setShowInactive] = useState(false)
+  const [matieres, setMatieres]    = useState([])
+  const [mpDataFull, setMpDataFull] = useState([])
 
   useEffect(() => { fetchProduits() }, [])
 
   async function fetchProduits() {
-    const { data } = await supabase.from('produits').select('*').order('famille').order('nom_produit')
-    setProduits(data || [])
+    const [{ data: prods }, { data: mp }] = await Promise.all([
+      supabase.from('produits').select('*').order('famille').order('nom_produit'),
+      supabase.from('matiere_premiere').select('matiere, unite, prix, quantite').or('actif.eq.true,actif.is.null').order('matiere'),
+    ])
+    setProduits(prods || [])
+    setMatieres(mp || [])
+    setMpDataFull(mp || [])
     setLoading(false)
   }
 
-  async function saveProduit(form) {
+  async function saveProduit(form, compo = []) {
     setSaving(true)
+    let nomProduit = form.nom_produit
+
     if (form.id_produit) {
       await supabase.from('produits').update(form).eq('id_produit', form.id_produit)
       setProduits(prev => prev.map(p => p.id_produit === form.id_produit ? { ...p, ...form } : p))
     } else {
-      // Générer id_produit depuis le nom (ex: "LATTE CARAMEL" → "LATTE_CARAMEL_001")
       const base = form.nom_produit.toUpperCase().replace(/[^A-Z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
       const id_produit = base + '_' + Date.now().toString(36).toUpperCase()
       const { data, error } = await supabase.from('produits').insert({ ...form, id_produit }).select().single()
       if (error) { alert('Erreur: ' + error.message); setSaving(false); return }
       if (data) setProduits(prev => [...prev, data])
     }
+
+    // Sauvegarder la composition
+    if (compo.length > 0) {
+      // Supprimer les lignes existantes puis réinsérer
+      await supabase.from('composition_produit').delete()
+        .eq('nom_produit', nomProduit).eq('type', 'produit fini')
+      const toInsert = compo
+        .filter(l => l.matiere && l.quantite_m)
+        .map(({ _new, id, ...l }) => ({
+          nom_produit: nomProduit,
+          type:        'produit fini',
+          matiere:     l.matiere,
+          quantite_m:  parseFloat(l.quantite_m),
+          unite:       l.unite || 'g',
+          prix_achat:  parseFloat(l.prix_achat || 0),
+        }))
+      if (toInsert.length > 0) {
+        const { error: compoErr } = await supabase.from('composition_produit').insert(toInsert)
+        if (compoErr) console.error('Erreur composition:', compoErr)
+      }
+    }
+
     setSaving(false); setModal(false); setEdit(null)
   }
 
@@ -702,41 +732,323 @@ function ProduitsTab() {
       )}
 
       {modal && isManager && (
-        <ProduitModal produit={edit} familles={familles.filter(f => f !== 'all')} onClose={() => { setModal(false); setEdit(null) }} onSave={saveProduit} saving={saving} />
+        <ProduitModal produit={edit} familles={familles.filter(f => f !== 'all')} matieres={matieres} mpData={mpDataFull} onClose={() => { setModal(false); setEdit(null) }} onSave={saveProduit} saving={saving} />
       )}
     </>
   )
 }
 
-function ProduitModal({ produit, familles, onClose, onSave, saving }) {
+function ProduitModal({ produit, familles, matieres, mpData, onClose, onSave, saving }) {
   const [form, setForm] = useState({
     id_produit:  produit?.id_produit  || null,
     nom_produit: produit?.nom_produit || '',
     famille:     produit?.famille     || (familles[0] || ''),
     prix:        produit?.prix        || '',
   })
-  const [newFam, setNewFam] = useState(false)
+  const [newFam, setNewFam]   = useState(false)
+  const [compo, setCompo]     = useState([])
+  const [loadingCompo, setLoadingCompo] = useState(false)
   const set = (k,v) => setForm(p => ({ ...p, [k]: v }))
+
+  // Map matiere → { unite, prixUnitaire }
+  const mpMap = {}
+  for (const m of (mpData || [])) {
+    mpMap[m.matiere] = { unite: m.unite, prixUnitaire: m.quantite > 0 ? m.prix / m.quantite : 0 }
+  }
+
+  // Charger la composition si édition
+  useEffect(() => {
+    if (!produit?.nom_produit) return
+    setLoadingCompo(true)
+    supabase.from('composition_produit').select('*')
+      .eq('nom_produit', produit.nom_produit).eq('type', 'produit fini')
+      .then(({ data }) => { setCompo(data || []); setLoadingCompo(false) })
+  }, [produit?.nom_produit])
+
+  function addLine() {
+    setCompo(prev => [...prev, { matiere: '', quantite_m: '', unite: 'g', prix_achat: '', _new: true }])
+  }
+
+  function updateLine(idx, field, val) {
+    setCompo(prev => prev.map((l, i) => {
+      if (i !== idx) return l
+      const updated = { ...l, [field]: val }
+      if (field === 'matiere') {
+        // Auto-fill unite depuis matiere_premiere
+        const mp = mpMap[val]
+        if (mp) updated.unite = mp.unite
+        // Recalculer prix si quantite déjà saisie
+        if (mp && updated.quantite_m) {
+          updated.prix_achat = parseFloat((mp.prixUnitaire * parseFloat(updated.quantite_m)).toFixed(4))
+        }
+      }
+      if (field === 'quantite_m') {
+        // Auto-calculer prix_achat = prixUnitaire × quantite
+        const mp = mpMap[l.matiere]
+        if (mp && mp.prixUnitaire > 0) {
+          updated.prix_achat = parseFloat((mp.prixUnitaire * parseFloat(val || 0)).toFixed(4))
+        }
+      }
+      return updated
+    }))
+  }
+
+  function removeLine(idx) {
+    setCompo(prev => prev.filter((_, i) => i !== idx))
+  }
+
   return (
     <Modal open onClose={onClose} title={produit ? 'Modifier le produit' : 'Nouveau produit'}
       footer={<>
         <button className="btn btn-outline" onClick={onClose}>Annuler</button>
-        <button className="btn btn-primary" disabled={!form.nom_produit || saving} onClick={() => onSave(form)}>
+        <button className="btn btn-primary" disabled={!form.nom_produit || saving}
+          onClick={() => onSave(form, compo)}>
           {saving ? <Spinner size={16} /> : <Save size={15} />} Enregistrer
         </button>
       </>}>
-      <div className="form-group"><label className="form-label">Nom du produit</label><input className="form-input" value={form.nom_produit} onChange={e => set('nom_produit', e.target.value)} autoFocus /></div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+
+      {/* INFOS PRODUIT */}
+      <div className="form-group">
+        <label className="form-label">Nom du produit</label>
+        <input className="form-input" value={form.nom_produit} onChange={e => set('nom_produit', e.target.value)} autoFocus />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
         <div className="form-group">
           <label className="form-label">Famille <button className="btn btn-ghost btn-sm" style={{ padding: '0 6px', fontSize: '0.7rem' }} onClick={() => setNewFam(n => !n)}>{newFam ? '←' : '+ Nouvelle'}</button></label>
-          {newFam ? <input className="form-input" placeholder="ex: CLOUD" value={form.famille} onChange={e => set('famille', e.target.value)} /> :
-            <select className="form-select" value={form.famille} onChange={e => set('famille', e.target.value)}>
-              {familles.map(f => <option key={f}>{f}</option>)}
-            </select>}
+          {newFam
+            ? <input className="form-input" placeholder="ex: CLOUD" value={form.famille} onChange={e => set('famille', e.target.value)} />
+            : <select className="form-select" value={form.famille} onChange={e => set('famille', e.target.value)}>
+                {familles.map(f => <option key={f}>{f}</option>)}
+              </select>}
         </div>
-        <div className="form-group"><label className="form-label">Prix (DT)</label><input className="form-input" type="number" step="0.5" value={form.prix} onChange={e => set('prix', parseFloat(e.target.value))} /></div>
+        <div className="form-group">
+          <label className="form-label">Prix (DT)</label>
+          <input className="form-input" type="number" step="0.5" value={form.prix} onChange={e => set('prix', parseFloat(e.target.value))} />
+        </div>
+      </div>
+
+      {/* COMPOSITION */}
+      <div style={{ borderTop: '1.5px solid var(--outside-cream)', paddingTop: '0.85rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+          <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>
+            Composition <span style={{ color: 'var(--outside-orange)' }}>({compo.length} ingrédient{compo.length !== 1 ? 's' : ''})</span>
+          </div>
+          <button className="btn btn-outline btn-sm" onClick={addLine}><Plus size={12} /> Ajouter</button>
+        </div>
+
+        {loadingCompo ? <Spinner size={16} /> : compo.length === 0 ? (
+          <div style={{ fontSize: '0.8rem', color: 'var(--muted)', textAlign: 'center', padding: '8px' }}>Aucun ingrédient — cliquez sur Ajouter</div>
+        ) : compo.map((line, idx) => (
+          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 60px 70px 28px', gap: 5, marginBottom: 6, alignItems: 'center' }}>
+            <select className="form-select" style={{ fontSize: '0.78rem', padding: '4px 8px' }}
+              value={line.matiere} onChange={e => updateLine(idx, 'matiere', e.target.value)}>
+              <option value="">— Matière —</option>
+              {matieres.map(m => <option key={m.matiere} value={m.matiere}>{m.matiere}</option>)}
+            </select>
+            <input className="form-input" type="number" step="0.5" placeholder="Qté"
+              style={{ fontSize: '0.78rem', padding: '4px 6px', textAlign: 'center' }}
+              value={line.quantite_m} onChange={e => updateLine(idx, 'quantite_m', e.target.value)} />
+            <input className="form-input" placeholder="Unité"
+              style={{ fontSize: '0.78rem', padding: '4px 6px', textAlign: 'center' }}
+              value={line.unite || ''} onChange={e => updateLine(idx, 'unite', e.target.value)} />
+            <input className="form-input" type="number" step="0.001" placeholder="Prix DT"
+              style={{ fontSize: '0.78rem', padding: '4px 6px', textAlign: 'center' }}
+              value={line.prix_achat || ''} onChange={e => updateLine(idx, 'prix_achat', e.target.value)} />
+            <button onClick={() => removeLine(idx)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '0.9rem', padding: 0, lineHeight: 1 }}>✕</button>
+          </div>
+        ))}
+
+        {compo.length > 0 && (
+          <div style={{ fontSize: '0.72rem', color: 'var(--outside-green)', fontWeight: 700, textAlign: 'right', marginTop: 4 }}>
+            Coût total : {compo.reduce((s, l) => s + parseFloat(l.prix_achat || 0), 0).toFixed(3)} DT
+          </div>
+        )}
       </div>
     </Modal>
+  )
+}
+
+// ── ONGLET ALIAS / CORRESPONDANCES ───────────────────────────────────────
+function AliasesTab() {
+  const { profile }   = useAuth()
+  const isManager     = hasRole(profile, 'manager')
+  const [aliases, setAliases] = useState([])
+  const [produits, setProduits] = useState([])
+  const [loading, setLoading]  = useState(true)
+  const [search, setSearch]    = useState('')
+  const [modal, setModal]      = useState(false)
+  const [edit, setEdit]        = useState(null)
+  const [saving, setSaving]    = useState(false)
+  // Pour chercher les noms dans transaction_line
+  const [ticketSearch, setTicketSearch] = useState('')
+  const [ticketResults, setTicketResults] = useState([])
+  const [ticketLoading, setTicketLoading] = useState(false)
+
+  useEffect(() => { fetchData() }, [])
+
+  async function fetchData() {
+    const [{ data: al }, { data: pr }] = await Promise.all([
+      supabase.from('produit_aliases').select('*').order('alias'),
+      supabase.from('produits').select('nom_produit, famille').order('famille').order('nom_produit'),
+    ])
+    setAliases(al || [])
+    setProduits(pr || [])
+    setLoading(false)
+  }
+
+  async function searchTickets(q) {
+    if (!q || q.length < 2) { setTicketResults([]); return }
+    setTicketLoading(true)
+    const { data } = await supabase
+      .from('transaction_line')
+      .select('produit')
+      .ilike('produit', `%${q}%`)
+      .limit(200)
+    const unique = [...new Set((data || []).map(d => d.produit.trim()))].sort()
+    // Exclure ceux déjà aliasés
+    const aliased = new Set(aliases.map(a => a.alias.toLowerCase()))
+    setTicketResults(unique.filter(p => !aliased.has(p.toLowerCase())))
+    setTicketLoading(false)
+  }
+
+  async function saveAlias(form) {
+    setSaving(true)
+
+    // 1. Corriger directement dans transaction_line
+    const { count, error: updateError } = await supabase
+      .from('transaction_line')
+      .update({ produit: form.nom_produit })
+      .eq('produit', form.alias)
+      .select('*', { count: 'exact', head: true })
+
+    if (updateError) {
+      alert('Erreur UPDATE transaction_line: ' + updateError.message)
+      setSaving(false)
+      return
+    }
+
+    // 2. Garder trace dans produit_aliases (historique)
+    if (form.id) {
+      await supabase.from('produit_aliases').update({ alias: form.alias, nom_produit: form.nom_produit }).eq('id', form.id)
+      setAliases(prev => prev.map(a => a.id === form.id ? { ...a, ...form } : a))
+    } else {
+      const { data } = await supabase.from('produit_aliases').insert({ alias: form.alias, nom_produit: form.nom_produit }).select().single()
+      if (data) setAliases(prev => [...prev, data].sort((a,b) => a.alias.localeCompare(b.alias)))
+    }
+
+    setSaving(false)
+    setModal(false)
+    setEdit(null)
+    setTicketSearch('')
+    setTicketResults([])
+    alert(`✓ ${count ?? 'N'} ligne(s) corrigées dans les tickets`)
+  }
+
+  async function deleteAlias(id) {
+    await supabase.from('produit_aliases').delete().eq('id', id)
+    setAliases(prev => prev.filter(a => a.id !== id))
+  }
+
+  const filtered = aliases.filter(a =>
+    !search || a.alias.toLowerCase().includes(search.toLowerCase()) || a.nom_produit.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '1rem' }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+          <input className="form-input" style={{ paddingLeft: 36 }} placeholder="Rechercher un alias..." value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        {isManager && <button className="btn btn-primary btn-sm" onClick={() => { setEdit({ alias: '', nom_produit: produits[0]?.nom_produit || '' }); setModal(true) }}><Plus size={14} /> Ajouter</button>}
+      </div>
+
+      {/* Info */}
+      <div style={{ background: 'var(--outside-cream)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: '1rem', fontSize: '0.8rem', color: 'var(--muted)' }}>
+        💡 Corrige directement les noms de produits dans <strong>transaction_line</strong>. Ex: renommer tous les tickets <strong>"LATTE CARA"</strong> → <strong>"LATTE CARAMEL"</strong>. Irréversible — vérifier avant de valider.
+      </div>
+
+      {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Spinner size={24} /></div> : (
+        filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--muted)', fontSize: '0.85rem' }}>
+            Aucun alias défini — les noms doivent correspondre exactement aux produits
+          </div>
+        ) : (
+          <div className="card">
+            {filtered.map((a, idx) => (
+              <div key={a.id} style={{ padding: '0.75rem 1rem', borderBottom: idx < filtered.length-1 ? '1.5px solid var(--outside-cream)' : 'none', display: 'flex', alignItems: 'center', gap: '10px', opacity: a.actif === false ? 0.5 : 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--outside-orange)', fontFamily: 'monospace' }}>{a.alias}</span>
+                    <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}>→</span>
+                    <span style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--outside-green)' }}>{a.nom_produit}</span>
+                  </div>
+                </div>
+                {isManager && (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--muted)' }} onClick={() => { setEdit(a); setModal(true) }}><Edit2 size={12} /></button>
+                    <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--danger)' }} onClick={() => deleteAlias(a.id)}><Trash2 size={12} /></button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )
+      )}
+
+      {/* MODAL */}
+      {modal && isManager && (
+        <Modal open onClose={() => { setModal(false); setEdit(null) }}
+          title={edit?.id ? 'Modifier la correspondance' : 'Nouvelle correspondance'}
+          footer={<>
+            <button className="btn btn-outline" onClick={() => { setModal(false); setEdit(null) }}>Annuler</button>
+            <button className="btn btn-primary" disabled={!edit?.alias || !edit?.nom_produit || saving}
+              onClick={() => saveAlias(edit)}>
+              {saving ? <Spinner size={16} /> : '✓'} Corriger dans les tickets
+            </button>
+          </>}>
+
+          {/* Recherche dans les tickets */}
+          <div className="form-group">
+            <label className="form-label">Nom dans les tickets (rechercher)</label>
+            <input className="form-input" placeholder="Tape pour chercher dans les ventes..."
+              value={ticketSearch}
+              onChange={e => { setTicketSearch(e.target.value); searchTickets(e.target.value) }} />
+            {ticketLoading && <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 4 }}>Recherche...</div>}
+            {ticketResults.length > 0 && (
+              <div style={{ border: '1.5px solid var(--outside-cream2)', borderRadius: 'var(--radius-md)', marginTop: 4, maxHeight: 160, overflowY: 'auto' }}>
+                {ticketResults.map(r => (
+                  <div key={r}
+                    onClick={() => { setEdit(p => ({ ...p, alias: r })); setTicketSearch(r); setTicketResults([]) }}
+                    style={{ padding: '6px 12px', cursor: 'pointer', fontSize: '0.85rem', fontFamily: 'monospace', borderBottom: '1px solid var(--outside-cream)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--outside-cream)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'white'}>
+                    {r}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Alias (nom exact dans les tickets)</label>
+            <input className="form-input" placeholder="ex: LATTE CARA"
+              value={edit?.alias || ''}
+              onChange={e => setEdit(p => ({ ...p, alias: e.target.value }))} />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Produit officiel → </label>
+            <select className="form-select" value={edit?.nom_produit || ''}
+              onChange={e => setEdit(p => ({ ...p, nom_produit: e.target.value }))}>
+              <option value="">— Choisir —</option>
+              {produits.map(p => <option key={p.nom_produit} value={p.nom_produit}>{p.nom_produit} ({p.famille})</option>)}
+            </select>
+          </div>
+        </Modal>
+      )}
+    </>
   )
 }
 
@@ -756,11 +1068,13 @@ export default function Catalogue() {
           <button className={`tab-btn${tab === 'matieres'     ? ' active' : ''}`} onClick={() => setTab('matieres')}>Matières</button>
           <button className={`tab-btn${tab === 'composition'  ? ' active' : ''}`} onClick={() => setTab('composition')}>Compositions</button>
           <button className={`tab-btn${tab === 'produits'     ? ' active' : ''}`} onClick={() => setTab('produits')}>Produits</button>
+          <button className={`tab-btn${tab === 'aliases'      ? ' active' : ''}`} onClick={() => setTab('aliases')}>Correspondances</button>
         </div>
 
         {tab === 'matieres'    && <MatieresTab />}
         {tab === 'composition' && <CompositionTab />}
         {tab === 'produits'    && <ProduitsTab />}
+        {tab === 'aliases'     && <AliasesTab />}
       </div>
     </>
   )

@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth, hasRole } from '../hooks/useAuth'
 import { Spinner, Avatar, Badge, Modal } from '../components/UI'
-import { ChevronDown, ChevronUp, Star, Save, Plus } from 'lucide-react'
-import { format } from 'date-fns'
+import { ChevronDown, ChevronUp, Star, Save, Plus, ChevronLeft, ChevronRight, Download } from 'lucide-react'
+import { format, startOfWeek, addDays, addWeeks, subWeeks, isToday } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 // ── DÉFINITION DES RÔLES ─────────────────────────────────────────────────
@@ -139,9 +139,10 @@ export default function Staff() {
 
         {/* TABS */}
         <div className="tabs" style={{ marginBottom: '1.25rem' }}>
-          <button className={`tab-btn${tab === 'org'   ? ' active' : ''}`} onClick={() => setTab('org')}>Équipe</button>
-          <button className={`tab-btn${tab === 'roles' ? ' active' : ''}`} onClick={() => setTab('roles')}>Rôles</button>
-          {isManager && <button className={`tab-btn${tab === 'eval'  ? ' active' : ''}`} onClick={() => setTab('eval')}>Évaluation</button>}
+          <button className={`tab-btn${tab === 'org'      ? ' active' : ''}`} onClick={() => setTab('org')}>Équipe</button>
+          <button className={`tab-btn${tab === 'roles'    ? ' active' : ''}`} onClick={() => setTab('roles')}>Rôles</button>
+          {isManager && <button className={`tab-btn${tab === 'planning' ? ' active' : ''}`} onClick={() => setTab('planning')}>Planning</button>}
+          {isManager && <button className={`tab-btn${tab === 'eval'     ? ' active' : ''}`} onClick={() => setTab('eval')}>Évaluation</button>}
         </div>
 
         {/* ── ONGLET ÉQUIPE ──────────────────────────────────────── */}
@@ -267,6 +268,7 @@ export default function Staff() {
         )}
 
         {/* ── ONGLET ÉVALUATION (manager) ────────────────────────── */}
+        {tab === 'planning' && isManager && <PlanningTab />}
         {tab === 'eval' && isManager && (
           <>
             {/* SÉLECTEUR PÉRIODE */}
@@ -421,5 +423,434 @@ function EvalModal({ member, existing, period, onClose, onSave }) {
           value={notes} onChange={e => setNotes(e.target.value)} />
       </div>
     </Modal>
+  )
+}
+
+// ── PLANNING TAB ──────────────────────────────────────────────────────────
+const TEAM_COLORS = {
+  'Youssef F': '#2E7D4F',
+  'Wassim':    '#4A3D8F',
+  'Hamza':     '#C4521A',
+  'Chahad':    '#C0392B',
+  'Hachem':    '#7B4F9E',
+  'Youssef':   '#2980B9',
+}
+const TEAM_NAMES = Object.keys(TEAM_COLORS)
+
+const SLOTS_MATIN = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00']
+const SLOTS_SOIR  = ['16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00','00:00']
+const ALL_SLOTS   = [...SLOTS_MATIN, ...SLOTS_SOIR]
+
+const ROLES_MAIN = [
+  { value: 'barista_lead',  label: 'Barista Lead',  color: '#C4521A' },
+  { value: 'barista',       label: 'Barista',        color: '#1A5C4A' },
+  { value: 'service_crew',  label: 'Service Crew',   color: '#3D5A8A' },
+  { value: 'support_crew',  label: 'Support Crew',   color: '#8B6B8A' },
+]
+const ROLES_EXTRA = [
+  { value: 'caisse_matin',  label: 'Caisse Matin',   color: '#1565C0' },
+  { value: 'caisse_soir',   label: 'Caisse Soir',    color: '#00838F' },
+]
+const DAYS_FR = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim']
+
+function PlanningTab() {
+  const { profile } = useAuth()
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [data, setData]             = useState({ shifts: {}, roles: {} })
+  const [loading, setLoading]       = useState(true)
+  const [picker, setPicker]         = useState(null)   // { date, slot }
+  const [rolePicker, setRolePicker] = useState(null)   // { date, staff }
+  const [quickStaff, setQuickStaff] = useState(null)   // staff pour mode rapide
+
+  const today    = new Date()
+  const monday   = addWeeks(startOfWeek(today, { weekStartsOn: 1 }), weekOffset)
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(monday, i))
+  const weekLabel = `${format(monday, 'd MMM', { locale: fr })} — ${format(weekDays[6], 'd MMM yyyy', { locale: fr })}`
+
+  useEffect(() => { load() }, [weekOffset])
+
+  async function load() {
+    setLoading(true)
+    const { data: rows } = await supabase.from('planning_shifts').select('*')
+      .gte('shift_date', format(monday, 'yyyy-MM-dd'))
+      .lte('shift_date', format(weekDays[6], 'yyyy-MM-dd'))
+    const shifts = {}, roles = {}
+    for (const r of (rows || [])) {
+      if (r.shift_type.startsWith('role|')) {
+        // role|matin|barista_lead or role|matin|caisse_matin (extra)
+        const parts = r.shift_type.split('|')
+        const period = parts[1], roleVal = parts[2]
+        const key = `${r.shift_date}|${r.staff_name}|${period}`
+        if (!roles[key]) roles[key] = { main: null, extras: [] }
+        const isExtra = ROLES_EXTRA.some(e => e.value === roleVal)
+        if (isExtra) { if (!roles[key].extras.includes(roleVal)) roles[key].extras.push(roleVal) }
+        else roles[key].main = roleVal
+      } else {
+        const key = `${r.shift_date}|${r.shift_type}`
+        if (!shifts[key]) shifts[key] = []
+        if (!shifts[key].includes(r.staff_name)) shifts[key].push(r.staff_name)
+      }
+    }
+    setData({ shifts, roles })
+    setLoading(false)
+  }
+
+  async function toggleStaff(staffName, date, slot) {
+    const key     = `${date}|${slot}`
+    const present = data.shifts[key] || []
+    const isOn    = present.includes(staffName)
+
+    // Mise à jour locale IMMÉDIATE (pas d'attente Supabase)
+    setData(prev => {
+      const cur = prev.shifts[key] || []
+      const next = isOn ? cur.filter(n => n !== staffName) : [...cur, staffName]
+      return { ...prev, shifts: { ...prev.shifts, [key]: next } }
+    })
+
+    // Sync Supabase en arrière-plan
+    if (isOn) {
+      supabase.from('planning_shifts').delete()
+        .eq('staff_name', staffName).eq('shift_date', date).eq('shift_type', slot)
+        .then(() => {})
+    } else {
+      supabase.from('planning_shifts').upsert(
+        { staff_name: staffName, shift_date: date, shift_type: slot, created_by: profile?.id, updated_at: new Date().toISOString() },
+        { onConflict: 'staff_name,shift_date,shift_type' }
+      ).then(() => {})
+    }
+  }
+
+  async function setRoleValue(staffName, date, period, roleVal, isExtra) {
+    const key = `${date}|${staffName}|${period}`
+    const shiftType = `role|${period}|${roleVal}`
+    // Toggle extra (checkbox), replace main (radio)
+    const current = data.roles[key] || { main: null, extras: [] }
+    if (isExtra) {
+      const hasIt = current.extras.includes(roleVal)
+      if (hasIt) {
+        await supabase.from('planning_shifts').delete()
+          .eq('staff_name', staffName).eq('shift_date', date).eq('shift_type', shiftType)
+        setData(prev => { const r = {...(prev.roles[key] || {main:null,extras:[]})}; r.extras = r.extras.filter(e=>e!==roleVal); return { ...prev, roles: { ...prev.roles, [key]: r } } })
+      } else {
+        await supabase.from('planning_shifts').upsert({ staff_name: staffName, shift_date: date, shift_type: shiftType, created_by: profile?.id }, { onConflict: 'staff_name,shift_date,shift_type' })
+        setData(prev => { const r = {...(prev.roles[key] || {main:null,extras:[]})}; r.extras = [...r.extras, roleVal]; return { ...prev, roles: { ...prev.roles, [key]: r } } })
+      }
+    } else {
+      // Delete old main role for this period, set new
+      await supabase.from('planning_shifts').delete()
+        .eq('staff_name', staffName).eq('shift_date', date)
+        .in('shift_type', ROLES_MAIN.map(r => `role|${period}|${r.value}`))
+      if (current.main !== roleVal) {
+        await supabase.from('planning_shifts').upsert({ staff_name: staffName, shift_date: date, shift_type: shiftType, created_by: profile?.id }, { onConflict: 'staff_name,shift_date,shift_type' })
+        setData(prev => { const r = {...(prev.roles[key] || {main:null,extras:[]})}; r.main = roleVal; return { ...prev, roles: { ...prev.roles, [key]: r } } })
+      } else {
+        setData(prev => { const r = {...(prev.roles[key] || {main:null,extras:[]})}; r.main = null; return { ...prev, roles: { ...prev.roles, [key]: r } } })
+      }
+    }
+    setRolePicker(null)
+  }
+
+  async function copierSemainePrecedente() {
+    const prevMonday = subWeeks(monday, 1)
+    const prevDays   = Array.from({ length: 7 }, (_, i) => addDays(prevMonday, i))
+    const { data: rows } = await supabase.from('planning_shifts').select('*')
+      .gte('shift_date', format(prevMonday, 'yyyy-MM-dd'))
+      .lte('shift_date', format(prevDays[6], 'yyyy-MM-dd'))
+    if (!rows?.length) { alert('Aucun planning la semaine précédente'); return }
+    for (const { id, created_at, shift_date, ...r } of rows) {
+      await supabase.from('planning_shifts').upsert({
+        ...r, shift_date: format(addDays(new Date(shift_date+'T00:00:00'), 7), 'yyyy-MM-dd'),
+        created_by: profile?.id, updated_at: new Date().toISOString()
+      }, { onConflict: 'staff_name,shift_date,shift_type' })
+    }
+    load()
+  }
+
+  function downloadCSV() {
+    const rows = [['Horaire', ...weekDays.map(d => format(d,'EEE d/MM',{locale:fr}))]]
+    ALL_SLOTS.forEach(slot => {
+      const row = [slot]
+      weekDays.forEach(d => {
+        const present = data.shifts[`${format(d,'yyyy-MM-dd')}|${slot}`] || []
+        row.push(present.join(' + ') || '')
+      })
+      rows.push(row)
+    })
+    const csv  = rows.map(r => r.map(c => '"' + String(c) + '"').join(';')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url; a.download = `planning_${format(monday,'dd-MM-yyyy')}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  return (
+    <>
+      {/* NAV SEMAINE */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:'1rem' }}>
+        <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(o=>o-1)}><ChevronLeft size={16}/></button>
+        <div style={{ flex:1, textAlign:'center' }}>
+          <div style={{ fontWeight:700, fontSize:'0.875rem' }}>{weekLabel}</div>
+          <div style={{ display:'flex', justifyContent:'center', gap:4, marginTop:4 }}>
+            {[-1,0,1,2,3].map(w=>(
+              <button key={w} className={`btn btn-sm ${weekOffset===w?'btn-primary':'btn-outline'}`}
+                style={{ padding:'2px 8px', fontSize:'0.7rem' }} onClick={()=>setWeekOffset(w)}>
+                {w===0?'Cette sem.':w===-1?'S-1':`S+${w}`}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button className="btn btn-ghost btn-sm" onClick={()=>setWeekOffset(o=>o+1)}><ChevronRight size={16}/></button>
+      </div>
+
+      {/* ACTIONS */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.75rem', gap:8, flexWrap:'wrap' }}>
+        <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
+          {TEAM_NAMES.map(name=>(
+            <button key={name} onClick={()=>setQuickStaff(quickStaff===name?null:name)}
+              style={{ padding:'4px 10px', borderRadius:'var(--radius-pill)', border:`2px solid ${TEAM_COLORS[name]}`,
+                background: quickStaff===name ? TEAM_COLORS[name] : 'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
+              <div style={{ width:8, height:8, borderRadius:'50%', background: quickStaff===name?'white':TEAM_COLORS[name] }}/>
+              <span style={{ fontSize:'0.7rem', fontWeight:700, color: quickStaff===name?'white':TEAM_COLORS[name] }}>{name}</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ display:'flex', gap:6 }}>
+          <button className="btn btn-outline btn-sm" onClick={copierSemainePrecedente}>↩ S-1</button>
+          <button className="btn btn-outline btn-sm" onClick={downloadCSV}><Download size={13}/> CSV</button>
+        </div>
+      </div>
+
+      {quickStaff && (
+        <div style={{ background:'var(--outside-green)', color:'white', padding:'6px 12px', borderRadius:'var(--radius-md)', marginBottom:8, display:'flex', justifyContent:'space-between', alignItems:'center', fontSize:'0.82rem', fontWeight:700 }}>
+          <span>Cliquer les créneaux pour <strong>{quickStaff}</strong></span>
+          <button onClick={()=>setQuickStaff(null)} style={{ background:'rgba(255,255,255,0.2)', border:'none', borderRadius:4, color:'white', cursor:'pointer', padding:'2px 8px' }}>✕ Fin</button>
+        </div>
+      )}
+
+      {/* GRILLE HORAIRE */}
+      {loading ? <div style={{display:'flex',justifyContent:'center',padding:'2rem'}}><Spinner size={24}/></div> : (
+        <div style={{ overflowX:'auto', marginLeft:'-1rem', marginRight:'-1rem' }}>
+          <div style={{ minWidth:520, paddingLeft:'1rem', paddingRight:'1rem' }}>
+
+            {/* HEADER JOURS */}
+            <div style={{ display:'grid', gridTemplateColumns:'52px repeat(7,1fr)', gap:2, marginBottom:2, position:'sticky', top:0, background:'var(--outside-cream)', zIndex:10, paddingTop:2, paddingBottom:2 }}>
+              <div/>
+              {weekDays.map((d,i)=>(
+                <div key={i} style={{ textAlign:'center', padding:'3px 2px', borderRadius:'var(--radius-sm)', background:isToday(d)?'var(--outside-dark)':'white', border:'1px solid var(--outside-cream2)' }}>
+                  <div style={{ fontSize:'0.58rem', fontWeight:800, textTransform:'uppercase', color:isToday(d)?'var(--outside-amber)':'var(--muted)' }}>{DAYS_FR[i]}</div>
+                  <div style={{ fontSize:'0.78rem', fontWeight:800, color:isToday(d)?'white':'var(--outside-dark)' }}>{format(d,'d')}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* CRÉNEAUX MATIN + SOIR */}
+            <div style={{ fontSize:'0.6rem', fontWeight:800, textTransform:'uppercase', color:'var(--outside-orange)', padding:'4px 0 2px 0' }}>— Matin</div>
+
+            {ALL_SLOTS.map((slot, slotIdx) => (
+              <div key={slot}>
+                {slotIdx === SLOTS_MATIN.length && (
+                  <div style={{ fontSize:'0.6rem', fontWeight:800, textTransform:'uppercase', color:'var(--outside-orange)', padding:'6px 0 2px 0' }}>— Soir</div>
+                )}
+                <div style={{ display:'grid', gridTemplateColumns:'52px repeat(7,1fr)', gap:2, marginBottom:1 }}>
+                  <div style={{ fontSize:'0.58rem', color:'var(--muted)', fontWeight:700, display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:5, borderRight:'2px solid var(--outside-cream2)' }}>
+                    {slot}
+                  </div>
+                  {weekDays.map((d, di) => {
+                    const dateStr = format(d,'yyyy-MM-dd')
+                    const key     = `${dateStr}|${slot}`
+                    const present = data.shifts[key] || []
+                    const isOpen  = picker?.date===dateStr && picker?.slot===slot
+                    const qActive = quickStaff && present.includes(quickStaff)
+                    const border  = qActive ? TEAM_COLORS[quickStaff] : isOpen ? 'var(--outside-orange)' : quickStaff ? 'var(--outside-amber)' : 'var(--outside-cream2)'
+                    return (
+                      <div key={di} style={{ position:'relative' }}>
+                        <div
+                          onClick={() => {
+                            if (quickStaff) {
+                              toggleStaff(quickStaff, dateStr, slot)
+                            } else {
+                              setPicker(isOpen ? null : { date: dateStr, slot })
+                            }
+                          }}
+                          style={{ height:32, borderRadius:4, border:`1.5px solid ${border}`, background:present.length>0?'white':'#FAFAFA', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:2, padding:'0 2px', overflow:'hidden' }}>
+                          {present.length===0 ? (
+                            <span style={{ fontSize:'0.6rem', color:'var(--outside-cream2)' }}>·</span>
+                          ) : present.map(name=>(
+                            <div key={name} title={name} style={{ width:16, height:16, borderRadius:'50%', background:TEAM_COLORS[name]||'#999', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.5rem', fontWeight:900, color:'white' }}>
+                              {name.charAt(0)}
+                            </div>
+                          ))}
+                        </div>
+                        {isOpen && !quickStaff && (
+                          <div style={{ position:'absolute', top:34, left:'50%', transform:'translateX(-50%)', zIndex:300, background:'var(--outside-dark)', borderRadius:'var(--radius-lg)', padding:'8px', boxShadow:'var(--shadow-lg)', minWidth:130 }}>
+                            <div style={{ fontSize:'0.6rem', color:'rgba(255,255,255,0.4)', fontWeight:800, textAlign:'center', marginBottom:6, textTransform:'uppercase' }}>{slot}</div>
+                            {Object.keys(TEAM_COLORS).map(name => {
+                              const isOn = present.includes(name)
+                              return (
+                                <button key={name} onClick={e=>{e.stopPropagation();toggleStaff(name,dateStr,slot)}}
+                                  style={{ width:'100%', padding:'5px 8px', borderRadius:'var(--radius-md)', border:'none', background:isOn?TEAM_COLORS[name]:'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:7, marginBottom:2 }}>
+                                  <div style={{ width:10, height:10, borderRadius:'50%', background:isOn?'white':TEAM_COLORS[name], border:isOn?'2px solid rgba(255,255,255,0.5)':'none', flexShrink:0 }}/>
+                                  <span style={{ fontSize:'0.78rem', fontWeight:isOn?800:600, color:isOn?'white':'rgba(255,255,255,0.6)' }}>{name}</span>
+                                  {isOn && <span style={{marginLeft:'auto',color:'white',fontSize:'0.7rem'}}>✓</span>}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {picker && <div style={{ position:'fixed', inset:0, zIndex:200 }} onClick={()=>setPicker(null)}/>}
+      {rolePicker && <div style={{ position:'fixed', inset:0, zIndex:200 }} onClick={()=>setRolePicker(null)}/>}
+
+      {/* RÔLES PAR SHIFT */}
+      {!loading && (
+        <div style={{ marginTop:'1.25rem' }}>
+          <div className="section-label">Rôles par shift</div>
+          <div style={{ overflowX:'auto', marginLeft:'-1rem', marginRight:'-1rem', paddingLeft:'1rem', paddingRight:'1rem' }}>
+            <div style={{ minWidth:520 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'85px repeat(7,1fr)', gap:2, marginBottom:4 }}>
+                <div/>
+                {weekDays.map((d,i)=>(
+                  <div key={i} style={{ textAlign:'center', fontSize:'0.62rem', fontWeight:800, color:isToday(d)?'var(--outside-orange)':'var(--muted)' }}>
+                    {DAYS_FR[i]} {format(d,'d')}
+                  </div>
+                ))}
+              </div>
+
+              {TEAM_NAMES.map(name=>(
+                <div key={name} style={{ display:'grid', gridTemplateColumns:'85px repeat(7,1fr)', gap:2, marginBottom:3, alignItems:'start' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:4, paddingTop:4 }}>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:TEAM_COLORS[name] }}/>
+                    <span style={{ fontSize:'0.7rem', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>
+                  </div>
+                  {weekDays.map((d,di)=>{
+                    const dateStr   = format(d,'yyyy-MM-dd')
+                    const rKeyM     = `${dateStr}|${name}|matin`
+                    const rKeyS     = `${dateStr}|${name}|soir`
+                    const roleM     = data.roles[rKeyM] || { main:null, extras:[] }
+                    const roleS     = data.roles[rKeyS] || { main:null, extras:[] }
+                    const isOpen    = rolePicker?.date===dateStr && rolePicker?.staff===name
+                    return (
+                      <div key={di} style={{ position:'relative' }}>
+                        <div onClick={()=>setRolePicker(isOpen?null:{date:dateStr,staff:name})}
+                          style={{ borderRadius:4, border:`1.5px solid ${isOpen?'var(--outside-orange)':'var(--outside-cream2)'}`, background:'white', cursor:'pointer', overflow:'hidden', minHeight:50 }}>
+
+                          {/* MATIN */}
+                          <div style={{ padding:'3px 4px', borderBottom:'1px solid var(--outside-cream2)', background: roleM.main ? (ROLES_MAIN.find(r=>r.value===roleM.main)?.color+'18') : 'transparent' }}>
+                            <div style={{ fontSize:'0.47rem', fontWeight:800, color:'var(--muted)', textTransform:'uppercase' }}>Matin</div>
+                            <div style={{ fontSize:'0.6rem', fontWeight:800, color: roleM.main ? ROLES_MAIN.find(r=>r.value===roleM.main)?.color : 'var(--outside-cream2)', lineHeight:1.2 }}>
+                              {roleM.main ? ROLES_MAIN.find(r=>r.value===roleM.main)?.label : '—'}
+                            </div>
+                            {roleM.extras.map(e=>(
+                              <div key={e} style={{ fontSize:'0.5rem', fontWeight:700, color: ROLES_EXTRA.find(r=>r.value===e)?.color }}>
+                                + {ROLES_EXTRA.find(r=>r.value===e)?.label}
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* SOIR */}
+                          <div style={{ padding:'3px 4px', background: roleS.main ? (ROLES_MAIN.find(r=>r.value===roleS.main)?.color+'18') : 'transparent' }}>
+                            <div style={{ fontSize:'0.47rem', fontWeight:800, color:'var(--muted)', textTransform:'uppercase' }}>Soir</div>
+                            <div style={{ fontSize:'0.6rem', fontWeight:800, color: roleS.main ? ROLES_MAIN.find(r=>r.value===roleS.main)?.color : 'var(--outside-cream2)', lineHeight:1.2 }}>
+                              {roleS.main ? ROLES_MAIN.find(r=>r.value===roleS.main)?.label : '—'}
+                            </div>
+                            {roleS.extras.map(e=>(
+                              <div key={e} style={{ fontSize:'0.5rem', fontWeight:700, color: ROLES_EXTRA.find(r=>r.value===e)?.color }}>
+                                + {ROLES_EXTRA.find(r=>r.value===e)?.label}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* ROLE PICKER */}
+                        {isOpen && (
+                          <div style={{ position:'absolute', top:54, left:0, zIndex:300, background:'var(--outside-dark)', borderRadius:'var(--radius-lg)', padding:'8px', boxShadow:'var(--shadow-lg)', minWidth:160 }}>
+                            {['matin','soir'].map(period=>{
+                              const rKey = `${dateStr}|${name}|${period}`
+                              const role = data.roles[rKey] || { main:null, extras:[] }
+                              return (
+                                <div key={period}>
+                                  <div style={{ fontSize:'0.6rem', color:'rgba(255,255,255,0.4)', fontWeight:800, textTransform:'uppercase', marginBottom:3, marginTop: period==='soir'?8:0 }}>
+                                    {period === 'matin' ? '☀ Shift Matin' : '🌙 Shift Soir'}
+                                  </div>
+                                  {ROLES_MAIN.map(r=>(
+                                    <button key={r.value} onClick={e=>{e.stopPropagation();setRoleValue(name,dateStr,period,r.value,false)}}
+                                      style={{ width:'100%', padding:'4px 8px', borderRadius:4, border:'none', background:role.main===r.value?r.color:'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
+                                      <div style={{ width:8, height:8, borderRadius:'50%', background:r.color, border:'1px solid rgba(255,255,255,0.3)', flexShrink:0 }}/>
+                                      <span style={{ fontSize:'0.72rem', fontWeight:600, color:role.main===r.value?'white':'rgba(255,255,255,0.7)' }}>{r.label}</span>
+                                      {role.main===r.value && <span style={{marginLeft:'auto',color:'white',fontSize:'0.7rem'}}>✓</span>}
+                                    </button>
+                                  ))}
+                                  <div style={{ borderTop:'1px solid rgba(255,255,255,0.1)', marginTop:4, paddingTop:4 }}>
+                                    {ROLES_EXTRA.map(r=>(
+                                      <button key={r.value} onClick={e=>{e.stopPropagation();setRoleValue(name,dateStr,period,r.value,true)}}
+                                        style={{ width:'100%', padding:'3px 8px', borderRadius:4, border:'none', background:role.extras.includes(r.value)?r.color:'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:6, marginBottom:1 }}>
+                                        <div style={{ width:12, height:12, borderRadius:3, background:'transparent', border:`1.5px solid ${r.color}`, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                                          {role.extras.includes(r.value) && <span style={{ fontSize:'0.5rem', color:'white' }}>✓</span>}
+                                        </div>
+                                        <span style={{ fontSize:'0.7rem', fontWeight:600, color:role.extras.includes(r.value)?'white':'rgba(255,255,255,0.7)' }}>{r.label}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RÉCAP */}
+      {!loading && (
+        <div style={{ marginTop:'1.25rem' }}>
+          <div className="section-label">Récap semaine</div>
+          <div className="card">
+            <div style={{ display:'grid', gridTemplateColumns:'85px 1fr repeat(7,28px)', gap:4, padding:'5px 1rem', background:'var(--outside-cream)', borderBottom:'1.5px solid var(--outside-cream2)', fontSize:'0.58rem', fontWeight:800, textTransform:'uppercase', color:'var(--muted)' }}>
+              <div>Employé</div><div/>
+              {weekDays.map((d,i)=><div key={i} style={{textAlign:'center'}}>{DAYS_FR[i]}</div>)}
+            </div>
+            {TEAM_NAMES.map((name,idx)=>{
+              const dayHours = weekDays.map(d=>{
+                const dateStr = format(d,'yyyy-MM-dd')
+                return ALL_SLOTS.filter(s=>(data.shifts[`${dateStr}|${s}`]||[]).includes(name)).length
+              })
+              const total = dayHours.reduce((a,b)=>a+b,0)
+              return (
+                <div key={name} style={{ display:'grid', gridTemplateColumns:'85px 1fr repeat(7,28px)', gap:4, padding:'6px 1rem', borderBottom:idx<TEAM_NAMES.length-1?'1.5px solid var(--outside-cream)':'none', alignItems:'center' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:TEAM_COLORS[name] }}/>
+                    <span style={{ fontSize:'0.75rem', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>
+                  </div>
+                  <div style={{ height:4, background:'var(--outside-cream2)', borderRadius:2, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:`${total/20*100}%`, background:TEAM_COLORS[name], borderRadius:2 }}/>
+                  </div>
+                  {dayHours.map((h,i)=>(
+                    <div key={i} style={{ textAlign:'center', fontSize:'0.7rem', fontWeight:h>0?800:400, color:h>0?TEAM_COLORS[name]:'var(--outside-cream2)', background:h>0?TEAM_COLORS[name]+'18':'transparent', borderRadius:4, padding:'1px 0' }}>
+                      {h>0?`${h}h`:'—'}
+                    </div>
+                  ))}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </>
   )
 }
