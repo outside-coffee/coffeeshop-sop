@@ -75,10 +75,21 @@ export default function Team() {
 
   async function updateMember(member, updates) {
     setSaving(true)
-    // Mise à jour du nom d'affichage
     const displayName = [updates.prenom, updates.nom].filter(Boolean).join(' ')
-    await supabase.from('profiles').update({ ...updates, name: displayName || member.name }).eq('id', member.id)
-    setMembers(m => m.map(x => x.id === member.id ? { ...x, ...updates, name: displayName || x.name } : x))
+    // Seulement les colonnes valides dans profiles (exclure pin)
+    const { pin, ...safeUpdates } = updates
+    const payload = {
+      ...safeUpdates,
+      name: displayName || member.name,
+    }
+    const { error } = await supabase.from('profiles').update(payload).eq('id', member.id)
+    if (error) {
+      console.error('updateMember error:', error)
+      alert('Erreur: ' + error.message)
+      setSaving(false)
+      return
+    }
+    setMembers(m => m.map(x => x.id === member.id ? { ...x, ...payload } : x))
     setSaving(false); setEditModal(null)
   }
 
@@ -211,8 +222,10 @@ export default function Team() {
 
                   {/* ACTIONS */}
                   <div style={{ display: 'flex', gap: 3, flexShrink: 0 }}>
-                    <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--muted)' }} onClick={() => setEditModal(m)}>
-                      <Edit2 size={13}/>
+                    <button className="btn btn-outline btn-sm"
+                      style={{ fontSize: '0.72rem', fontWeight: 700, padding: '4px 10px' }}
+                      onClick={() => setEditModal(m)}>
+                      Modifier
                     </button>
                     {isAdmin && <>
                       <button className="btn btn-ghost btn-sm" style={{ fontSize: '0.65rem', color: 'var(--muted)', padding: '4px 6px' }} onClick={() => resetPin(m)}>
