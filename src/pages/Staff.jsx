@@ -23,6 +23,19 @@ const ROLES_DEF = {
     ],
     skills: ['Leadership', 'Organisation', 'Rigueur', 'Communication', 'Analyse'],
   },
+  barista_lead: {
+    label:    'Barista Lead',
+    color:    '#B8460F',
+    bg:       '#FEF3DC',
+    icon:     '⭐',
+    missions: [
+      'Supervision du bar et de l\'équipe barista',
+      'Préparation des boissons selon les standards Outside',
+      'Formation et coaching des baristas',
+      'Gestion du matériel et de la qualité',
+    ],
+    skills: ['Technique café', 'Leadership', 'Rapidité', 'Formation', 'Qualité'],
+  },
   barista: {
     label:    'Barista',
     color:    '#1A5C4A',
@@ -63,6 +76,26 @@ const ROLES_DEF = {
     ],
     skills: ['Rigueur', 'Propreté', 'Organisation', 'Réactivité'],
   },
+  femme_menage: {
+    label:    'Femme de ménage',
+    color:    '#6B6B8A',
+    bg:       '#F0F0F5',
+    icon:     '🧺',
+    missions: [
+      'Nettoyage et entretien des locaux',
+      'Hygiène des sanitaires et espaces communs',
+      'Gestion des déchets',
+    ],
+    skills: ['Propreté', 'Rigueur', 'Organisation'],
+  },
+}
+
+const ROLES_DEF_DEFAULT = {
+  label: 'Équipe', color: '#999', bg: '#F5F5F5', icon: '👤', missions: [], skills: [],
+}
+
+function getRoleDef(role) {
+  return ROLES_DEF[role] || ROLES_DEF_DEFAULT
 }
 
 // ── CRITÈRES D'ÉVALUATION ────────────────────────────────────────────────
@@ -76,21 +109,51 @@ const EVAL_CRITERIA = [
 ]
 
 // Membres de l'équipe Outside
-const TEAM = [
-  { name: 'Youssef F',       role: 'manager',      poste: 'Manager' },
-  { name: 'Wassim',          role: 'barista',       poste: 'Barista' },
-  { name: 'Hamza',           role: 'barista',       poste: 'Barista' },
-  { name: 'Chahad',          role: 'service_crew',  poste: 'Service Crew' },
-  { name: 'Hachem',          role: 'support_crew',  poste: 'Support Crew' },
-  { name: 'Youssef',         role: 'support_crew',  poste: 'Support Crew' },
-]
+const ROLES_OPS_LABELS = {
+  manager:      'Manager',
+  barista_lead: 'Barista Lead',
+  barista:      'Barista',
+  service_crew: 'Service Crew',
+  support_crew: 'Support Crew',
+  femme_menage: 'Femme de ménage',
+}
 
 export default function Staff() {
   const { profile } = useAuth()
   const isManager   = hasRole(profile, 'manager')
 
-  const [tab, setTab]               = useState('org')   // 'org' | 'roles' | 'eval'
+  const [tab, setTab]               = useState('org')
   const [expandedRole, setExpandedRole] = useState(null)
+  const [team, setTeam]             = useState([])
+  const [teamLoading, setTeamLoading] = useState(true)
+
+  useEffect(() => { loadTeam() }, [])
+
+  async function loadTeam() {
+    const { data } = await supabase.from('profiles')
+      .select('id, name, prenom, nom, role, role_operationnel, planning_color, avatar_color, actif')
+      .eq('actif', true)
+      .neq('role', 'admin')
+      .order('role').order('name')
+    // Normaliser en format TEAM
+    const ROLE_ORDER = ['manager','barista_lead','barista','service_crew','support_crew','femme_menage']
+    const sorted = (data || []).sort((a,b) => {
+      const ra = ROLE_ORDER.indexOf(a.role_operationnel || a.role)
+      const rb = ROLE_ORDER.indexOf(b.role_operationnel || b.role)
+      return ra - rb
+    })
+    setTeam(sorted.map(m => ({
+      id:    m.id,
+      name:  m.name,
+      role:  m.role_operationnel || m.role,
+      poste: ROLES_OPS_LABELS[m.role_operationnel || m.role] || m.role,
+      color: m.planning_color || m.avatar_color || '#999',
+    })))
+    setTeamLoading(false)
+  }
+
+  // Alias TEAM → team pour compatibilité avec le reste du code
+  const TEAM = team
   const [evalModal, setEvalModal]   = useState(null)    // membre sélectionné
   const [evals, setEvals]           = useState([])
   const [loading, setLoading]       = useState(false)
@@ -147,75 +210,79 @@ export default function Staff() {
 
         {/* ── ONGLET ÉQUIPE ──────────────────────────────────────── */}
         {tab === 'org' && (
-          <>
-            {/* ORGANIGRAMME */}
-            <div style={{ marginBottom: '1.25rem' }}>
-              <div className="section-label">Organigramme</div>
+          teamLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Spinner size={24} /></div>
+          ) : (
+            <>
+              {/* ORGANIGRAMME */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <div className="section-label">Organigramme</div>
 
-              {/* Manager */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
-                <MemberCard member={TEAM[0]} />
-              </div>
+                {/* Manager */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
+                  {TEAM[0] && <MemberCard member={TEAM[0]} />}
+                </div>
 
-              {/* Ligne de connexion */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
-                <div style={{ width: 2, height: 20, background: 'var(--outside-cream2)' }} />
-              </div>
+                {/* Ligne de connexion */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
+                  <div style={{ width: 2, height: 20, background: 'var(--outside-cream2)' }} />
+                </div>
 
-              {/* Baristas */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '0.75rem' }}>
-                {TEAM.filter(m => m.role === 'barista').map(m => <MemberCard key={m.name} member={m} />)}
-              </div>
+                {/* Baristas */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '0.75rem' }}>
+                  {TEAM.filter(m => m.role === 'barista' || m.role === 'barista_lead').map(m => <MemberCard key={m.name} member={m} />)}
+                </div>
 
-              {/* Service & Support */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
-                {['service_crew', 'support_crew'].map(role => {
-                  const members = TEAM.filter(m => m.role === role)
-                  const rd = ROLES_DEF[role]
-                  return (
-                    <div key={role} className="card" style={{ padding: '0.75rem 1rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '1rem' }}>{rd.icon}</span>
-                        <span style={{ fontWeight: 800, fontSize: '0.85rem', color: rd.color }}>{rd.label}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                        {members.map(m => (
-                          <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: rd.bg, padding: '4px 10px', borderRadius: 'var(--radius-pill)' }}>
-                            <div style={{ width: 24, height: 24, borderRadius: '50%', background: rd.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 800, color: 'white' }}>
-                              {m.name.charAt(0)}
+                {/* Service & Support */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
+                  {['service_crew', 'support_crew'].map(role => {
+                    const members = TEAM.filter(m => m.role === role)
+                    const rd = getRoleDef(role)
+                    return (
+                      <div key={role} className="card" style={{ padding: '0.75rem 1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '1rem' }}>{rd.icon}</span>
+                          <span style={{ fontWeight: 800, fontSize: '0.85rem', color: rd.color }}>{rd.label}</span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {members.map(m => (
+                            <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: rd.bg, padding: '4px 10px', borderRadius: 'var(--radius-pill)' }}>
+                              <div style={{ width: 24, height: 24, borderRadius: '50%', background: rd.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 800, color: 'white' }}>
+                                {m.name.charAt(0)}
+                              </div>
+                              <span style={{ fontWeight: 700, fontSize: '0.82rem', color: rd.color }}>{m.name}</span>
                             </div>
-                            <span style={{ fontWeight: 700, fontSize: '0.82rem', color: rd.color }}>{m.name}</span>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* LISTE DÉTAILLÉE */}
+              <div className="section-label">Fiches membres</div>
+              <div className="card">
+                {TEAM.map((member, idx) => {
+                  const rd = getRoleDef(member.role)
+                  return (
+                    <div key={member.name} style={{ padding: '0.85rem 1rem', borderBottom: idx < TEAM.length - 1 ? '1.5px solid var(--outside-cream)' : 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: 40, height: 40, borderRadius: '50%', background: rd.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 800, color: 'white', flexShrink: 0 }}>
+                        {member.name.charAt(0)}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>{member.name}</div>
+                        <div style={{ fontSize: '0.72rem', color: rd.color, fontWeight: 700, marginTop: '1px' }}>{rd.label}</div>
+                      </div>
+                      <div style={{ fontSize: '0.7rem', background: rd.bg, color: rd.color, padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>
+                        {rd.icon}
                       </div>
                     </div>
                   )
                 })}
               </div>
-            </div>
-
-            {/* LISTE DÉTAILLÉE */}
-            <div className="section-label">Fiches membres</div>
-            <div className="card">
-              {TEAM.map((member, idx) => {
-                const rd = ROLES_DEF[member.role]
-                return (
-                  <div key={member.name} style={{ padding: '0.85rem 1rem', borderBottom: idx < TEAM.length - 1 ? '1.5px solid var(--outside-cream)' : 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: rd.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 800, color: 'white', flexShrink: 0 }}>
-                      {member.name.charAt(0)}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>{member.name}</div>
-                      <div style={{ fontSize: '0.72rem', color: rd.color, fontWeight: 700, marginTop: '1px' }}>{rd.label}</div>
-                    </div>
-                    <div style={{ fontSize: '0.7rem', background: rd.bg, color: rd.color, padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>
-                      {rd.icon}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </>
+            </>
+          )
         )}
 
         {/* ── ONGLET RÔLES ───────────────────────────────────────── */}
@@ -284,7 +351,7 @@ export default function Staff() {
             {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Spinner size={24} /></div> : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {TEAM.map(member => {
-                  const rd   = ROLES_DEF[member.role]
+                  const rd   = getRoleDef(member.role)
                   const eval_ = evals.find(e => e.staff_name === member.name)
                   const score = eval_ ? EVAL_CRITERIA.reduce((s, c) => s + (eval_[c.id] || 0), 0) : null
 
@@ -345,7 +412,7 @@ export default function Staff() {
 }
 
 function MemberCard({ member }) {
-  const rd = ROLES_DEF[member.role]
+  const rd = getRoleDef(member.role)
   return (
     <div className="card" style={{ padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
       <div style={{ width: 36, height: 36, borderRadius: '50%', background: rd.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', fontWeight: 800, color: 'white', flexShrink: 0 }}>
@@ -360,7 +427,7 @@ function MemberCard({ member }) {
 }
 
 function EvalModal({ member, existing, period, onClose, onSave }) {
-  const rd = ROLES_DEF[member.role]
+  const rd = getRoleDef(member.role)
   const init = {}
   EVAL_CRITERIA.forEach(c => { init[c.id] = existing?.[c.id] ?? 0 })
   const [scores, setScores] = useState(init)

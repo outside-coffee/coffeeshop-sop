@@ -80,11 +80,13 @@ export default function Team() {
     const { pin, ...safeUpdates } = updates
     const payload = {
       ...safeUpdates,
-      name: displayName || member.name,
+      name:             displayName || member.name,
+      date_recrutement: safeUpdates.date_recrutement || null,
+      telephone:        safeUpdates.telephone        || null,
+      nom:              safeUpdates.nom              || null,
     }
     const { error } = await supabase.from('profiles').update(payload).eq('id', member.id)
     if (error) {
-      console.error('updateMember error:', error)
       alert('Erreur: ' + error.message)
       setSaving(false)
       return
