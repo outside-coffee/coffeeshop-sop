@@ -532,10 +532,10 @@ const ROLES_MAIN = [
   { value: 'support_crew',  label: 'Support Crew',   color: '#8B6B8A' },
 ]
 const ROLES_EXTRA = [
-  { value: 'caisse_matin',  label: 'Caisse Matin',   color: '#1565C0' },
-  { value: 'caisse_soir',   label: 'Caisse Soir',    color: '#00838F' },
-  { value: 'ouverture',     label: 'Ouverture',      color: '#2E7D32' },
-  { value: 'fermeture',     label: 'Fermeture',      color: '#4A148C' },
+  { value: 'ouverture',     label: 'Ouverture',      color: '#2E7D32', shift: 'matin' },
+  { value: 'caisse_matin',  label: 'Caisse Matin',   color: '#1565C0', shift: 'matin' },
+  { value: 'caisse_soir',   label: 'Caisse Soir',    color: '#00838F', shift: 'soir'  },
+  { value: 'fermeture',     label: 'Fermeture',      color: '#4A148C', shift: 'soir'  },
 ]
 const DAYS_FR = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim']
 
@@ -1115,7 +1115,7 @@ ${slotRows}
                   ))}
                 </div>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                  {ROLES_EXTRA.map(r => (
+                  {ROLES_EXTRA.filter(r => r.shift === period).map(r => (
                     <button key={r.value}
                       onClick={() => setRoleValue(rolePicker.staff, rolePicker.date, period, r.value, true)}
                       style={{ padding:'5px 12px', borderRadius:'var(--radius-pill)', border:`1.5px solid ${r.color}`,
