@@ -407,6 +407,7 @@ export default function Staff() {
           onSave={saveEval}
         />
       )}
+
       {/* SLOT PICKER — BOTTOM SHEET */}
       {picker && !quickStaff && (
         <BottomSheet title={picker.slot} onClose={() => setPicker(null)}>
