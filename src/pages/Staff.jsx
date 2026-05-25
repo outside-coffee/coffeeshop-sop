@@ -407,6 +407,89 @@ export default function Staff() {
           onSave={saveEval}
         />
       )}
+      {/* SLOT PICKER — BOTTOM SHEET */}
+      {picker && !quickStaff && (
+        <BottomSheet title={picker.slot} onClose={() => setPicker(null)}>
+          {teamNames.map(name => {
+            const present = data.shifts[`${picker.date}|${picker.slot}`] || []
+            const isOn = present.includes(name)
+            return (
+              <button key={name} onClick={() => toggleStaff(name, picker.date, picker.slot)}
+                style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-md)', border:'none',
+                         background:isOn ? tc[name] : 'var(--outside-cream)', cursor:'pointer',
+                         display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
+                <div style={{ width:12, height:12, borderRadius:'50%', background:isOn?'white':tc[name], flexShrink:0 }}/>
+                <span style={{ fontSize:'0.95rem', fontWeight:isOn?800:600, color:isOn?'white':'var(--outside-dark)' }}>{name}</span>
+                {isOn && <span style={{ marginLeft:'auto', fontSize:'0.85rem' }}>✓</span>}
+              </button>
+            )
+          })}
+        </BottomSheet>
+      )}
+
+      {/* ROLE PICKER — BOTTOM SHEET */}
+      {rolePicker && (
+        <BottomSheet
+          title={`${rolePicker.staff} — ${format(new Date(rolePicker.date+'T00:00:00'), 'EEE d MMM', { locale: fr })}`}
+          onClose={() => setRolePicker(null)}>
+          {['matin','soir'].map(period => {
+            const rKey = `${rolePicker.date}|${rolePicker.staff}|${period}`
+            const role = data.roles[rKey] || { main:null, extras:[] }
+            return (
+              <div key={period} style={{ marginBottom: period==='matin' ? 20 : 0 }}>
+                <div style={{ fontSize:'0.72rem', fontWeight:800, textTransform:'uppercase', color:'var(--muted)', marginBottom:10 }}>
+                  {period === 'matin' ? '☀ Shift Matin' : '🌙 Shift Soir'}
+                </div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:10 }}>
+                  {ROLES_MAIN.map(r => (
+                    <button key={r.value}
+                      onClick={() => setRoleValue(rolePicker.staff, rolePicker.date, period, r.value, false)}
+                      style={{ padding:'7px 14px', borderRadius:'var(--radius-pill)', border:`2px solid ${r.color}`,
+                               background:role.main===r.value ? r.color : 'transparent', cursor:'pointer' }}>
+                      <span style={{ fontSize:'0.82rem', fontWeight:700, color:role.main===r.value?'white':r.color }}>
+                        {r.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                  {ROLES_EXTRA.map(r => (
+                    <button key={r.value}
+                      onClick={() => setRoleValue(rolePicker.staff, rolePicker.date, period, r.value, true)}
+                      style={{ padding:'5px 12px', borderRadius:'var(--radius-pill)', border:`1.5px solid ${r.color}`,
+                               background:role.extras.includes(r.value) ? r.color : 'transparent', cursor:'pointer' }}>
+                      <span style={{ fontSize:'0.78rem', fontWeight:600, color:role.extras.includes(r.value)?'white':r.color }}>
+                        + {r.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </BottomSheet>
+      )}
+    </>
+  )
+}
+
+function BottomSheet({ title, onClose, children }) {
+  return (
+    <>
+      <div style={{ position:'fixed', inset:0, zIndex:400, background:'rgba(0,0,0,0.4)' }} onClick={onClose} />
+      <div style={{ position:'fixed', bottom:0, left:0, right:0, zIndex:401,
+                    background:'white', borderRadius:'16px 16px 0 0',
+                    padding:'1rem 1rem calc(1rem + env(safe-area-inset-bottom))',
+                    boxShadow:'0 -4px 24px rgba(0,0,0,0.15)', maxHeight:'80vh', overflowY:'auto' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' }}>
+          <div style={{ fontWeight:800, fontSize:'0.95rem' }}>{title}</div>
+          <button onClick={onClose}
+            style={{ background:'var(--outside-cream2)', border:'none', borderRadius:'50%',
+                     width:30, height:30, cursor:'pointer', display:'flex', alignItems:'center',
+                     justifyContent:'center', fontSize:'0.85rem', fontWeight:700 }}>✕</button>
+        </div>
+        {children}
+      </div>
     </>
   )
 }
@@ -928,22 +1011,6 @@ ${slotRows}
                             </div>
                           ))}
                         </div>
-                        {isOpen && !quickStaff && (
-                          <div style={{ position:'absolute', top:34, left:'50%', transform:'translateX(-50%)', zIndex:300, background:'var(--outside-dark)', borderRadius:'var(--radius-lg)', padding:'8px', boxShadow:'var(--shadow-lg)', minWidth:130 }}>
-                            <div style={{ fontSize:'0.6rem', color:'rgba(255,255,255,0.4)', fontWeight:800, textAlign:'center', marginBottom:6, textTransform:'uppercase' }}>{slot}</div>
-                            {teamNames.map(name => {
-                              const isOn = present.includes(name)
-                              return (
-                                <button key={name} onClick={e=>{e.stopPropagation();toggleStaff(name,dateStr,slot)}}
-                                  style={{ width:'100%', padding:'5px 8px', borderRadius:'var(--radius-md)', border:'none', background:isOn?tc[name]:'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:7, marginBottom:2 }}>
-                                  <div style={{ width:10, height:10, borderRadius:'50%', background:isOn?'white':tc[name], border:isOn?'2px solid rgba(255,255,255,0.5)':'none', flexShrink:0 }}/>
-                                  <span style={{ fontSize:'0.78rem', fontWeight:isOn?800:600, color:isOn?'white':'rgba(255,255,255,0.6)' }}>{name}</span>
-                                  {isOn && <span style={{marginLeft:'auto',color:'white',fontSize:'0.7rem'}}>✓</span>}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
                       </div>
                     )
                   })}
@@ -954,10 +1021,8 @@ ${slotRows}
         </div>
       )}
 
-      {picker && <div style={{ position:'fixed', inset:0, zIndex:200 }} onClick={()=>setPicker(null)}/>}
       {colorPicker && <div style={{ position:'fixed', inset:0, zIndex:350 }} onClick={()=>setColorPicker(null)}/>}
       {dlMenu && <div style={{ position:'fixed', inset:0, zIndex:350 }} onClick={()=>setDlMenu(false)}/>}
-      {rolePicker && <div style={{ position:'fixed', inset:0, zIndex:200 }} onClick={()=>setRolePicker(null)}/>}
 
       {/* RÔLES PAR SHIFT */}
       {!loading && (
@@ -1019,41 +1084,6 @@ ${slotRows}
                           </div>
                         </div>
 
-                        {/* ROLE PICKER */}
-                        {isOpen && (
-                          <div style={{ position:'absolute', top:54, left:0, zIndex:300, background:'var(--outside-dark)', borderRadius:'var(--radius-lg)', padding:'8px', boxShadow:'var(--shadow-lg)', minWidth:160 }}>
-                            {['matin','soir'].map(period=>{
-                              const rKey = `${dateStr}|${name}|${period}`
-                              const role = data.roles[rKey] || { main:null, extras:[] }
-                              return (
-                                <div key={period}>
-                                  <div style={{ fontSize:'0.6rem', color:'rgba(255,255,255,0.4)', fontWeight:800, textTransform:'uppercase', marginBottom:3, marginTop: period==='soir'?8:0 }}>
-                                    {period === 'matin' ? '☀ Shift Matin' : '🌙 Shift Soir'}
-                                  </div>
-                                  {ROLES_MAIN.map(r=>(
-                                    <button key={r.value} onClick={e=>{e.stopPropagation();setRoleValue(name,dateStr,period,r.value,false)}}
-                                      style={{ width:'100%', padding:'4px 8px', borderRadius:4, border:'none', background:role.main===r.value?r.color:'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
-                                      <div style={{ width:8, height:8, borderRadius:'50%', background:r.color, border:'1px solid rgba(255,255,255,0.3)', flexShrink:0 }}/>
-                                      <span style={{ fontSize:'0.72rem', fontWeight:600, color:role.main===r.value?'white':'rgba(255,255,255,0.7)' }}>{r.label}</span>
-                                      {role.main===r.value && <span style={{marginLeft:'auto',color:'white',fontSize:'0.7rem'}}>✓</span>}
-                                    </button>
-                                  ))}
-                                  <div style={{ borderTop:'1px solid rgba(255,255,255,0.1)', marginTop:4, paddingTop:4 }}>
-                                    {ROLES_EXTRA.map(r=>(
-                                      <button key={r.value} onClick={e=>{e.stopPropagation();setRoleValue(name,dateStr,period,r.value,true)}}
-                                        style={{ width:'100%', padding:'3px 8px', borderRadius:4, border:'none', background:role.extras.includes(r.value)?r.color:'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:6, marginBottom:1 }}>
-                                        <div style={{ width:12, height:12, borderRadius:3, background:'transparent', border:`1.5px solid ${r.color}`, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                                          {role.extras.includes(r.value) && <span style={{ fontSize:'0.5rem', color:'white' }}>✓</span>}
-                                        </div>
-                                        <span style={{ fontSize:'0.7rem', fontWeight:600, color:role.extras.includes(r.value)?'white':'rgba(255,255,255,0.7)' }}>{r.label}</span>
-                                      </button>
-                                    ))}
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
                       </div>
                     )
                   })}
