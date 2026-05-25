@@ -408,68 +408,6 @@ export default function Staff() {
         />
       )}
 
-      {/* SLOT PICKER — BOTTOM SHEET */}
-      {picker && !quickStaff && (
-        <BottomSheet title={picker.slot} onClose={() => setPicker(null)}>
-          {teamNames.map(name => {
-            const present = data.shifts[`${picker.date}|${picker.slot}`] || []
-            const isOn = present.includes(name)
-            return (
-              <button key={name} onClick={() => toggleStaff(name, picker.date, picker.slot)}
-                style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-md)', border:'none',
-                         background:isOn ? tc[name] : 'var(--outside-cream)', cursor:'pointer',
-                         display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
-                <div style={{ width:12, height:12, borderRadius:'50%', background:isOn?'white':tc[name], flexShrink:0 }}/>
-                <span style={{ fontSize:'0.95rem', fontWeight:isOn?800:600, color:isOn?'white':'var(--outside-dark)' }}>{name}</span>
-                {isOn && <span style={{ marginLeft:'auto', fontSize:'0.85rem' }}>✓</span>}
-              </button>
-            )
-          })}
-        </BottomSheet>
-      )}
-
-      {/* ROLE PICKER — BOTTOM SHEET */}
-      {rolePicker && (
-        <BottomSheet
-          title={`${rolePicker.staff} — ${format(new Date(rolePicker.date+'T00:00:00'), 'EEE d MMM', { locale: fr })}`}
-          onClose={() => setRolePicker(null)}>
-          {['matin','soir'].map(period => {
-            const rKey = `${rolePicker.date}|${rolePicker.staff}|${period}`
-            const role = data.roles[rKey] || { main:null, extras:[] }
-            return (
-              <div key={period} style={{ marginBottom: period==='matin' ? 20 : 0 }}>
-                <div style={{ fontSize:'0.72rem', fontWeight:800, textTransform:'uppercase', color:'var(--muted)', marginBottom:10 }}>
-                  {period === 'matin' ? '☀ Shift Matin' : '🌙 Shift Soir'}
-                </div>
-                <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:10 }}>
-                  {ROLES_MAIN.map(r => (
-                    <button key={r.value}
-                      onClick={() => setRoleValue(rolePicker.staff, rolePicker.date, period, r.value, false)}
-                      style={{ padding:'7px 14px', borderRadius:'var(--radius-pill)', border:`2px solid ${r.color}`,
-                               background:role.main===r.value ? r.color : 'transparent', cursor:'pointer' }}>
-                      <span style={{ fontSize:'0.82rem', fontWeight:700, color:role.main===r.value?'white':r.color }}>
-                        {r.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                  {ROLES_EXTRA.map(r => (
-                    <button key={r.value}
-                      onClick={() => setRoleValue(rolePicker.staff, rolePicker.date, period, r.value, true)}
-                      style={{ padding:'5px 12px', borderRadius:'var(--radius-pill)', border:`1.5px solid ${r.color}`,
-                               background:role.extras.includes(r.value) ? r.color : 'transparent', cursor:'pointer' }}>
-                      <span style={{ fontSize:'0.78rem', fontWeight:600, color:role.extras.includes(r.value)?'white':r.color }}>
-                        + {r.label}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </BottomSheet>
-      )}
     </>
   )
 }
@@ -1129,6 +1067,69 @@ ${slotRows}
             })}
           </div>
         </div>
+      )}
+
+      {/* SLOT PICKER — BOTTOM SHEET */}
+      {picker && !quickStaff && (
+        <BottomSheet title={picker.slot} onClose={() => setPicker(null)}>
+          {teamNames.map(name => {
+            const present = data.shifts[`${picker.date}|${picker.slot}`] || []
+            const isOn = present.includes(name)
+            return (
+              <button key={name} onClick={() => toggleStaff(name, picker.date, picker.slot)}
+                style={{ width:'100%', padding:'11px 14px', borderRadius:'var(--radius-md)', border:'none',
+                         background:isOn ? tc[name] : 'var(--outside-cream)', cursor:'pointer',
+                         display:'flex', alignItems:'center', gap:10, marginBottom:6 }}>
+                <div style={{ width:12, height:12, borderRadius:'50%', background:isOn?'white':tc[name], flexShrink:0 }}/>
+                <span style={{ fontSize:'0.95rem', fontWeight:isOn?800:600, color:isOn?'white':'var(--outside-dark)' }}>{name}</span>
+                {isOn && <span style={{ marginLeft:'auto', fontSize:'0.85rem' }}>✓</span>}
+              </button>
+            )
+          })}
+        </BottomSheet>
+      )}
+
+      {/* ROLE PICKER — BOTTOM SHEET */}
+      {rolePicker && (
+        <BottomSheet
+          title={`${rolePicker.staff} — ${format(new Date(rolePicker.date+'T00:00:00'), 'EEE d MMM', { locale: fr })}`}
+          onClose={() => setRolePicker(null)}>
+          {['matin','soir'].map(period => {
+            const rKey = `${rolePicker.date}|${rolePicker.staff}|${period}`
+            const role = data.roles[rKey] || { main:null, extras:[] }
+            return (
+              <div key={period} style={{ marginBottom: period==='matin' ? 20 : 0 }}>
+                <div style={{ fontSize:'0.72rem', fontWeight:800, textTransform:'uppercase', color:'var(--muted)', marginBottom:10 }}>
+                  {period === 'matin' ? '☀ Shift Matin' : '🌙 Shift Soir'}
+                </div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:10 }}>
+                  {ROLES_MAIN.map(r => (
+                    <button key={r.value}
+                      onClick={() => setRoleValue(rolePicker.staff, rolePicker.date, period, r.value, false)}
+                      style={{ padding:'7px 14px', borderRadius:'var(--radius-pill)', border:`2px solid ${r.color}`,
+                               background:role.main===r.value ? r.color : 'transparent', cursor:'pointer' }}>
+                      <span style={{ fontSize:'0.82rem', fontWeight:700, color:role.main===r.value?'white':r.color }}>
+                        {r.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                  {ROLES_EXTRA.map(r => (
+                    <button key={r.value}
+                      onClick={() => setRoleValue(rolePicker.staff, rolePicker.date, period, r.value, true)}
+                      style={{ padding:'5px 12px', borderRadius:'var(--radius-pill)', border:`1.5px solid ${r.color}`,
+                               background:role.extras.includes(r.value) ? r.color : 'transparent', cursor:'pointer' }}>
+                      <span style={{ fontSize:'0.78rem', fontWeight:600, color:role.extras.includes(r.value)?'white':r.color }}>
+                        + {r.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </BottomSheet>
       )}
     </>
   )
