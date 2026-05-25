@@ -14,3 +14,10 @@ CREATE TABLE planning_shifts (
 
 ALTER TABLE planning_shifts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "planning_all" ON planning_shifts FOR ALL USING (true);
+
+-- Ajouter colonnes planning_color dans profiles
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS planning_color text;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS is_planning_member boolean DEFAULT false;
+
+-- Ajouter colonnes dans finance_salaires pour lier au profil
+ALTER TABLE finance_salaires ADD COLUMN IF NOT EXISTS profile_id uuid REFERENCES profiles(id);

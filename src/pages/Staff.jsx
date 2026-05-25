@@ -427,15 +427,10 @@ function EvalModal({ member, existing, period, onClose, onSave }) {
 }
 
 // ── PLANNING TAB ──────────────────────────────────────────────────────────
-const TEAM_COLORS = {
-  'Youssef F': '#2E7D4F',
-  'Wassim':    '#4A3D8F',
-  'Hamza':     '#C4521A',
-  'Chahad':    '#C0392B',
-  'Hachem':    '#7B4F9E',
-  'Youssef':   '#2980B9',
-}
-const TEAM_NAMES = Object.keys(TEAM_COLORS)
+// TEAM_COLORS et TEAM_NAMES sont maintenant dynamiques (chargés depuis profiles)
+// Valeurs par défaut pour les cas où le chargement est en cours
+const TEAM_COLORS = {}
+const TEAM_NAMES  = []
 
 const SLOTS_MATIN = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00']
 const SLOTS_SOIR  = ['16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00','00:00']
@@ -450,17 +445,46 @@ const ROLES_MAIN = [
 const ROLES_EXTRA = [
   { value: 'caisse_matin',  label: 'Caisse Matin',   color: '#1565C0' },
   { value: 'caisse_soir',   label: 'Caisse Soir',    color: '#00838F' },
+  { value: 'ouverture',     label: 'Ouverture',      color: '#2E7D32' },
+  { value: 'fermeture',     label: 'Fermeture',      color: '#4A148C' },
 ]
 const DAYS_FR = ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim']
 
 function PlanningTab() {
   const { profile } = useAuth()
-  const [weekOffset, setWeekOffset] = useState(0)
-  const [data, setData]             = useState({ shifts: {}, roles: {} })
-  const [loading, setLoading]       = useState(true)
-  const [picker, setPicker]         = useState(null)   // { date, slot }
-  const [rolePicker, setRolePicker] = useState(null)   // { date, staff }
-  const [quickStaff, setQuickStaff] = useState(null)   // staff pour mode rapide
+  const [weekOffset, setWeekOffset]   = useState(0)
+  const [data, setData]               = useState({ shifts: {}, roles: {} })
+  const [loading, setLoading]         = useState(true)
+  const [picker, setPicker]           = useState(null)
+  const [rolePicker, setRolePicker]   = useState(null)
+  const [quickStaff, setQuickStaff]   = useState(null)
+  const [colorPicker, setColorPicker] = useState(null)
+  const [dlMenu, setDlMenu]           = useState(false)
+  const [teamMembers, setTeamMembers] = useState([]) // { name, color, id }
+
+  // tc = map name → color
+  const tc = Object.fromEntries(teamMembers.map(m => [m.name, m.color]))
+  const teamNames = teamMembers.map(m => m.name)
+
+  useEffect(() => { loadTeam() }, [])
+
+  async function loadTeam() {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, name, planning_color, is_planning_member')
+      .eq('is_planning_member', true)
+      .order('name')
+    setTeamMembers((profiles || []).map(p => ({ id: p.id, name: p.name, color: p.planning_color || '#999' })))
+  }
+
+  async function updateColor(name, color) {
+    const member = teamMembers.find(m => m.name === name)
+    if (member) {
+      await supabase.from('profiles').update({ planning_color: color }).eq('id', member.id)
+      setTeamMembers(prev => prev.map(m => m.name === name ? { ...m, color } : m))
+    }
+    setColorPicker(null)
+  }
 
   const today    = new Date()
   const monday   = addWeeks(startOfWeek(today, { weekStartsOn: 1 }), weekOffset)
@@ -566,13 +590,17 @@ function PlanningTab() {
     load()
   }
 
-  function downloadCSV() {
-    const rows = [['Horaire', ...weekDays.map(d => format(d,'EEE d/MM',{locale:fr}))]]
+  function downloadCSV(filterStaff = null) {
+    const header = filterStaff
+      ? ['Horaire', ...weekDays.map(d => format(d,'EEE d/MM',{locale:fr}))]
+      : ['Horaire', ...weekDays.map(d => format(d,'EEE d/MM',{locale:fr}))]
+    const rows = [header]
     ALL_SLOTS.forEach(slot => {
       const row = [slot]
       weekDays.forEach(d => {
-        const present = data.shifts[`${format(d,'yyyy-MM-dd')}|${slot}`] || []
-        row.push(present.join(' + ') || '')
+        const present = (data.shifts[`${format(d,'yyyy-MM-dd')}|${slot}`] || [])
+          .filter(n => !filterStaff || n === filterStaff)
+        row.push(filterStaff ? (present.length > 0 ? '✓' : '') : present.join(' + '))
       })
       rows.push(row)
     })
@@ -580,9 +608,133 @@ function PlanningTab() {
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
     const url  = URL.createObjectURL(blob)
     const a    = document.createElement('a')
-    a.href = url; a.download = `planning_${format(monday,'dd-MM-yyyy')}.csv`; a.click()
+    const fname = filterStaff
+      ? `planning_${filterStaff.replace(' ','_')}_${format(monday,'dd-MM-yyyy')}.csv`
+      : `planning_${format(monday,'dd-MM-yyyy')}.csv`
+    a.href = url; a.download = fname; a.click()
     URL.revokeObjectURL(url)
   }
+
+  function buildPlanningHTML(filterStaff, colors) {
+    const title = filterStaff ? `Planning — ${filterStaff} — ${weekLabel}` : `Planning Outside — ${weekLabel}`
+    const days  = weekDays.map(d => format(d,'EEE d/MM',{locale:fr}))
+    const ncols = 8
+
+    const slotRows = ALL_SLOTS.map(slot => {
+      const cells = weekDays.map(d => {
+        const present = (data.shifts[`${format(d,'yyyy-MM-dd')}|${slot}`] || [])
+          .filter(n => !filterStaff || n === filterStaff)
+        if (filterStaff) {
+          const bg = present.length > 0 ? colors[filterStaff] || '#999' : '#f9f9f9'
+          const tx = present.length > 0 ? 'white' : '#ccc'
+          return `<td style="background:${bg}!important;color:${tx}!important;font-weight:bold;text-align:center;font-size:13px;-webkit-print-color-adjust:exact">${present.length > 0 ? '✓' : ''}</td>`
+        }
+        const dots = present.map(n => {
+          const bg = colors[n] || '#999'
+          return `<span class="dot" style="background:${bg}!important">${n.charAt(0)}</span>`
+        }).join('')
+        return `<td style="text-align:center;padding:1px 2px">${dots || ''}</td>`
+      }).join('')
+      const sep = slot === '16:00' ? `<tr><td colspan="${ncols+1}" style="background:#C4521A;color:white;font-size:10px;font-weight:800;padding:3px 6px;text-transform:uppercase;letter-spacing:0.05em">— Soir</td></tr>` : ''
+      return `${sep}<tr><td style="font-size:11px;font-weight:700;color:#555;padding:2px 8px;white-space:nowrap;border-right:2px solid #ddd;background:#fafafa">${slot}</td>${cells}</tr>`
+    }).join('')
+
+    const legend = teamNames.filter(n => !filterStaff || n === filterStaff).map(n =>
+      `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:11px;font-weight:700">
+        <span class="legend-dot" style="background:${colors[n]||'#999'}!important"></span>${n}
+      </span>`
+    ).join('')
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
+<style>
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important}
+  body{font-family:Arial,sans-serif;margin:15px;color:#1D3A3A;font-size:12px}
+  h2{color:#1D3A3A;margin:0 0 6px;font-size:15px}
+  .legend{margin-bottom:10px;padding:6px;background:#f5f5f5;border-radius:4px}
+  table{border-collapse:collapse;width:100%;table-layout:fixed}
+  th{background:#1D3A3A!important;color:white!important;padding:5px 4px;font-size:11px;text-align:center;font-weight:800}
+  th:first-child{width:52px;text-align:left;padding-left:8px}
+  td{border:1px solid #eee;height:24px;vertical-align:middle}
+  .dot{display:inline-block;width:20px;height:20px;border-radius:50%;color:white;font-size:9px;font-weight:900;line-height:20px;text-align:center;margin:1px;vertical-align:middle;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  .legend-dot{width:14px;height:14px;border-radius:50%;display:inline-block;flex-shrink:0;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  @media print{@page{size:A4 landscape;margin:8mm}body{margin:0}}
+</style></head><body>
+<h2>${title}</h2>
+<div class="legend">${legend}</div>
+<table>
+<thead><tr><th>Horaire</th>${days.map(d=>`<th>${d}</th>`).join('')}</tr></thead>
+<tbody>
+<tr><td colspan="${ncols+1}" style="background:#1D3A3A;color:#D4892A;font-size:10px;font-weight:800;padding:3px 8px;text-transform:uppercase;letter-spacing:0.05em">— Matin</td></tr>
+${slotRows}
+</tbody></table>
+</body></html>`
+  }
+
+  function buildRolesHTML(colors) {
+    const title = `Rôles par shift — ${weekLabel}`
+    const days  = weekDays.map(d => format(d,'EEE d/MM',{locale:fr}))
+    const rows  = teamNames.map(name => {
+      const cells = weekDays.map(d => {
+        const dateStr = format(d,'yyyy-MM-dd')
+        const roleM   = data.roles[`${dateStr}|${name}|matin`]   || { main:null, extras:[] }
+        const roleS   = data.roles[`${dateStr}|${name}|soir`]    || { main:null, extras:[] }
+        const color   = colors[name] || '#999'
+        const fmtRole = (r, period) => {
+          const mainLabel = ROLES_MAIN.find(x=>x.value===r.main)?.label || ''
+          const extraLabels = r.extras.map(e => ROLES_EXTRA.find(x=>x.value===e)?.label || '').filter(Boolean)
+          if (!mainLabel && !extraLabels.length) return `<div style="color:#ccc;font-size:9px">${period}: —</div>`
+          return `<div style="font-size:9px;margin-bottom:2px">
+            <span style="font-weight:800;color:#444;text-transform:uppercase;font-size:8px">${period}: </span>
+            <span style="font-weight:700;color:${color}">${mainLabel}</span>
+            ${extraLabels.map(l=>`<span style="font-size:8px;color:#1565C0;font-weight:600"> +${l}</span>`).join('')}
+          </div>`
+        }
+        return `<td style="padding:3px 5px;vertical-align:top">${fmtRole(roleM,'Matin')}${fmtRole(roleS,'Soir')}</td>`
+      }).join('')
+      return `<tr>
+        <td style="padding:4px 8px;white-space:nowrap;font-weight:700;font-size:11px;background:#fafafa;border-right:2px solid #ddd">
+          <span style="display:inline-flex;align-items:center;gap:5px">
+            <span style="width:10px;height:10px;border-radius:50%;background:${colors[name]||'#999'};display:inline-block"></span>${name}
+          </span>
+        </td>${cells}
+      </tr>`
+    }).join('')
+
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title}</title>
+<style>
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+  body{font-family:Arial,sans-serif;margin:15px;color:#1D3A3A}
+  h2{color:#1D3A3A;margin:0 0 10px;font-size:15px}
+  table{border-collapse:collapse;width:100%;table-layout:fixed}
+  th{background:#1D3A3A!important;color:white!important;padding:5px 4px;font-size:11px;text-align:center;font-weight:800}
+  th:first-child{width:90px;text-align:left;padding-left:8px}
+  td{border:1px solid #eee;min-height:42px}
+  @media print{@page{size:A4 landscape;margin:8mm}body{margin:0}}
+</style></head><body>
+<h2>${title}</h2>
+<table>
+<thead><tr><th>Employé</th>${days.map(d=>`<th>${d}</th>`).join('')}</tr></thead>
+<tbody>${rows}</tbody>
+</table>
+</body></html>`
+  }
+
+  function openPDF(html) {
+    const w = window.open('','_blank')
+    w.document.write(html)
+    w.document.close()
+    w.focus()
+    setTimeout(()=>{ w.print() }, 600)
+  }
+
+  function downloadPDF(filterStaff = null) {
+    openPDF(buildPlanningHTML(filterStaff, tc))
+  }
+
+  function downloadRolesPDF() {
+    openPDF(buildRolesHTML(tc))
+  }
+
 
   return (
     <>
@@ -606,18 +758,45 @@ function PlanningTab() {
       {/* ACTIONS */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.75rem', gap:8, flexWrap:'wrap' }}>
         <div style={{ display:'flex', gap:5, flexWrap:'wrap' }}>
-          {TEAM_NAMES.map(name=>(
+          {teamNames.map(name=>(
             <button key={name} onClick={()=>setQuickStaff(quickStaff===name?null:name)}
-              style={{ padding:'4px 10px', borderRadius:'var(--radius-pill)', border:`2px solid ${TEAM_COLORS[name]}`,
-                background: quickStaff===name ? TEAM_COLORS[name] : 'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
-              <div style={{ width:8, height:8, borderRadius:'50%', background: quickStaff===name?'white':TEAM_COLORS[name] }}/>
-              <span style={{ fontSize:'0.7rem', fontWeight:700, color: quickStaff===name?'white':TEAM_COLORS[name] }}>{name}</span>
+              style={{ padding:'4px 10px', borderRadius:'var(--radius-pill)', border:`2px solid ${tc[name]}`,
+                background: quickStaff===name ? tc[name] : 'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:5 }}>
+              <div style={{ width:8, height:8, borderRadius:'50%', background: quickStaff===name?'white':tc[name] }}/>
+              <span style={{ fontSize:'0.7rem', fontWeight:700, color: quickStaff===name?'white':tc[name] }}>{name}</span>
             </button>
           ))}
         </div>
         <div style={{ display:'flex', gap:6 }}>
           <button className="btn btn-outline btn-sm" onClick={copierSemainePrecedente}>↩ S-1</button>
-          <button className="btn btn-outline btn-sm" onClick={downloadCSV}><Download size={13}/> CSV</button>
+          <div style={{ position:'relative' }}>
+            <button className="btn btn-outline btn-sm" onClick={()=>setDlMenu(m=>!m)}><Download size={13}/> Télécharger</button>
+            {dlMenu && (
+              <div style={{ position:'absolute', right:0, top:34, zIndex:400, background:'var(--outside-dark)', borderRadius:'var(--radius-lg)', padding:'6px', boxShadow:'var(--shadow-lg)', minWidth:180 }}>
+                <div style={{ fontSize:'0.6rem', color:'rgba(255,255,255,0.4)', fontWeight:800, textTransform:'uppercase', padding:'2px 8px 6px' }}>Planning complet</div>
+                <button onClick={()=>{downloadPDF();setDlMenu(false)}} style={{ width:'100%', padding:'5px 10px', borderRadius:4, border:'none', background:'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:8, color:'white', marginBottom:2 }}>
+                  <span style={{fontSize:'0.8rem'}}>📄</span><span style={{fontSize:'0.78rem'}}>PDF (impression)</span>
+                </button>
+                <button onClick={()=>{downloadCSV();setDlMenu(false)}} style={{ width:'100%', padding:'5px 10px', borderRadius:4, border:'none', background:'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:8, color:'white', marginBottom:6 }}>
+                  <span style={{fontSize:'0.8rem'}}>📊</span><span style={{fontSize:'0.78rem'}}>CSV (Excel)</span>
+                </button>
+                <div style={{ borderTop:'1px solid rgba(255,255,255,0.1)', paddingTop:4, marginBottom:4 }}>
+                  <button onClick={()=>{downloadRolesPDF();setDlMenu(false)}} style={{ width:'100%', padding:'5px 10px', borderRadius:4, border:'none', background:'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:8, color:'white' }}>
+                    <span style={{fontSize:'0.8rem'}}>📋</span><span style={{fontSize:'0.78rem'}}>Rôles par shift (PDF)</span>
+                  </button>
+                </div>
+                <div style={{ borderTop:'1px solid rgba(255,255,255,0.1)', paddingTop:4 }}>
+                  <div style={{ fontSize:'0.6rem', color:'rgba(255,255,255,0.4)', fontWeight:800, textTransform:'uppercase', padding:'2px 8px 6px' }}>Par personne</div>
+                  {teamNames.map(name=>(
+                    <button key={name} onClick={()=>{downloadPDF(name);setDlMenu(false)}} style={{ width:'100%', padding:'4px 10px', borderRadius:4, border:'none', background:'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:8, color:'white', marginBottom:1 }}>
+                      <div style={{ width:10, height:10, borderRadius:'50%', background:tc[name], flexShrink:0 }}/>
+                      <span style={{fontSize:'0.75rem'}}>{name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -662,7 +841,7 @@ function PlanningTab() {
                     const present = data.shifts[key] || []
                     const isOpen  = picker?.date===dateStr && picker?.slot===slot
                     const qActive = quickStaff && present.includes(quickStaff)
-                    const border  = qActive ? TEAM_COLORS[quickStaff] : isOpen ? 'var(--outside-orange)' : quickStaff ? 'var(--outside-amber)' : 'var(--outside-cream2)'
+                    const border  = qActive ? tc[quickStaff] : isOpen ? 'var(--outside-orange)' : quickStaff ? 'var(--outside-amber)' : 'var(--outside-cream2)'
                     return (
                       <div key={di} style={{ position:'relative' }}>
                         <div
@@ -677,7 +856,7 @@ function PlanningTab() {
                           {present.length===0 ? (
                             <span style={{ fontSize:'0.6rem', color:'var(--outside-cream2)' }}>·</span>
                           ) : present.map(name=>(
-                            <div key={name} title={name} style={{ width:16, height:16, borderRadius:'50%', background:TEAM_COLORS[name]||'#999', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.5rem', fontWeight:900, color:'white' }}>
+                            <div key={name} title={name} style={{ width:16, height:16, borderRadius:'50%', background:tc[name]||'#999', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'0.5rem', fontWeight:900, color:'white' }}>
                               {name.charAt(0)}
                             </div>
                           ))}
@@ -685,12 +864,12 @@ function PlanningTab() {
                         {isOpen && !quickStaff && (
                           <div style={{ position:'absolute', top:34, left:'50%', transform:'translateX(-50%)', zIndex:300, background:'var(--outside-dark)', borderRadius:'var(--radius-lg)', padding:'8px', boxShadow:'var(--shadow-lg)', minWidth:130 }}>
                             <div style={{ fontSize:'0.6rem', color:'rgba(255,255,255,0.4)', fontWeight:800, textAlign:'center', marginBottom:6, textTransform:'uppercase' }}>{slot}</div>
-                            {Object.keys(TEAM_COLORS).map(name => {
+                            {teamNames.map(name => {
                               const isOn = present.includes(name)
                               return (
                                 <button key={name} onClick={e=>{e.stopPropagation();toggleStaff(name,dateStr,slot)}}
-                                  style={{ width:'100%', padding:'5px 8px', borderRadius:'var(--radius-md)', border:'none', background:isOn?TEAM_COLORS[name]:'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:7, marginBottom:2 }}>
-                                  <div style={{ width:10, height:10, borderRadius:'50%', background:isOn?'white':TEAM_COLORS[name], border:isOn?'2px solid rgba(255,255,255,0.5)':'none', flexShrink:0 }}/>
+                                  style={{ width:'100%', padding:'5px 8px', borderRadius:'var(--radius-md)', border:'none', background:isOn?tc[name]:'transparent', cursor:'pointer', display:'flex', alignItems:'center', gap:7, marginBottom:2 }}>
+                                  <div style={{ width:10, height:10, borderRadius:'50%', background:isOn?'white':tc[name], border:isOn?'2px solid rgba(255,255,255,0.5)':'none', flexShrink:0 }}/>
                                   <span style={{ fontSize:'0.78rem', fontWeight:isOn?800:600, color:isOn?'white':'rgba(255,255,255,0.6)' }}>{name}</span>
                                   {isOn && <span style={{marginLeft:'auto',color:'white',fontSize:'0.7rem'}}>✓</span>}
                                 </button>
@@ -709,6 +888,8 @@ function PlanningTab() {
       )}
 
       {picker && <div style={{ position:'fixed', inset:0, zIndex:200 }} onClick={()=>setPicker(null)}/>}
+      {colorPicker && <div style={{ position:'fixed', inset:0, zIndex:350 }} onClick={()=>setColorPicker(null)}/>}
+      {dlMenu && <div style={{ position:'fixed', inset:0, zIndex:350 }} onClick={()=>setDlMenu(false)}/>}
       {rolePicker && <div style={{ position:'fixed', inset:0, zIndex:200 }} onClick={()=>setRolePicker(null)}/>}
 
       {/* RÔLES PAR SHIFT */}
@@ -726,10 +907,10 @@ function PlanningTab() {
                 ))}
               </div>
 
-              {TEAM_NAMES.map(name=>(
+              {teamNames.map(name=>(
                 <div key={name} style={{ display:'grid', gridTemplateColumns:'85px repeat(7,1fr)', gap:2, marginBottom:3, alignItems:'start' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:4, paddingTop:4 }}>
-                    <div style={{ width:8, height:8, borderRadius:'50%', background:TEAM_COLORS[name] }}/>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:tc[name] }}/>
                     <span style={{ fontSize:'0.7rem', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>
                   </div>
                   {weekDays.map((d,di)=>{
@@ -825,7 +1006,7 @@ function PlanningTab() {
               <div>Employé</div><div/>
               {weekDays.map((d,i)=><div key={i} style={{textAlign:'center'}}>{DAYS_FR[i]}</div>)}
             </div>
-            {TEAM_NAMES.map((name,idx)=>{
+            {teamNames.map((name,idx)=>{
               const dayHours = weekDays.map(d=>{
                 const dateStr = format(d,'yyyy-MM-dd')
                 return ALL_SLOTS.filter(s=>(data.shifts[`${dateStr}|${s}`]||[]).includes(name)).length
@@ -834,14 +1015,14 @@ function PlanningTab() {
               return (
                 <div key={name} style={{ display:'grid', gridTemplateColumns:'85px 1fr repeat(7,28px)', gap:4, padding:'6px 1rem', borderBottom:idx<TEAM_NAMES.length-1?'1.5px solid var(--outside-cream)':'none', alignItems:'center' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-                    <div style={{ width:8, height:8, borderRadius:'50%', background:TEAM_COLORS[name] }}/>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:tc[name] }}/>
                     <span style={{ fontSize:'0.75rem', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>
                   </div>
                   <div style={{ height:4, background:'var(--outside-cream2)', borderRadius:2, overflow:'hidden' }}>
-                    <div style={{ height:'100%', width:`${total/20*100}%`, background:TEAM_COLORS[name], borderRadius:2 }}/>
+                    <div style={{ height:'100%', width:`${total/20*100}%`, background:tc[name], borderRadius:2 }}/>
                   </div>
                   {dayHours.map((h,i)=>(
-                    <div key={i} style={{ textAlign:'center', fontSize:'0.7rem', fontWeight:h>0?800:400, color:h>0?TEAM_COLORS[name]:'var(--outside-cream2)', background:h>0?TEAM_COLORS[name]+'18':'transparent', borderRadius:4, padding:'1px 0' }}>
+                    <div key={i} style={{ textAlign:'center', fontSize:'0.7rem', fontWeight:h>0?800:400, color:h>0?tc[name]:'var(--outside-cream2)', background:h>0?tc[name]+'18':'transparent', borderRadius:4, padding:'1px 0' }}>
                       {h>0?`${h}h`:'—'}
                     </div>
                   ))}
