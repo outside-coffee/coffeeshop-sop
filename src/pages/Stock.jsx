@@ -46,26 +46,37 @@ function TabDashboard() {
   const [items, setItems]     = useState([])
   const [loading, setLoading] = useState(true)
 
+  const [lastInv, setLastInv] = useState(null)
+
   useEffect(()=>{ load() },[])
 
   async function load() {
-    const [{ data: si }, { data: mp }, { data: pertes }] = await Promise.all([
+    const [{ data: si }, { data: mp }, { data: pertes }, { data: invLast }] = await Promise.all([
       supabase.from('stock_items').select('*').eq('active',true).order('category').order('name'),
-      supabase.from('matiere_premiere').select('matiere,prix,quantite').or('actif.eq.true,actif.is.null'),
+      supabase.from('matiere_premiere').select('matiere,prix,quantite').eq('actif',true),
       supabase.from('stock_pertes').select('item_name,qte').gte('date_perte', format(startOfMonth(new Date()),'yyyy-MM-dd')),
+      supabase.from('stock_inventaires').select('date_inventaire').order('date_inventaire',{ascending:false}).limit(1),
     ])
     const mpMap={}
     for (const m of (mp||[])) mpMap[norm(m.matiere)] = m.quantite>0 ? m.prix/m.quantite : 0
     const pertesMap={}
     for (const p of (pertes||[])) pertesMap[p.item_name]=(pertesMap[p.item_name]||0)+parseFloat(p.qte||0)
 
-    setItems((si||[]).map(item=>({
+    // Lier stock_items aux matières actives uniquement
+    const activeMp = new Set(Object.keys(mpMap))
+    const filtered = (si||[]).filter(item => {
+      const k = norm(item.matiere_ref||item.name)
+      return !item.matiere_ref || activeMp.has(k) || true // garder tous mais calculer valeur 0 si inactif
+    })
+    setItems(filtered.map(item=>({
       ...item,
       prixUnit: mpMap[norm(item.matiere_ref||item.name)]||0,
       valeur:   (item.current_qty||0)*(mpMap[norm(item.matiere_ref||item.name)]||0),
       perdus:   pertesMap[item.name]||0,
       alerte:   (item.current_qty||0) <= (item.min_qty||0),
     })))
+    // Dernier inventaire
+    if (invLast?.[0]) setLastInv(invLast[0].date_inventaire)
     setLoading(false)
   }
 
@@ -89,6 +100,34 @@ function TabDashboard() {
           </div>
         ))}
       </div>
+
+      {/* RAPPEL INVENTAIRE */}
+      {(() => {
+        if (!lastInv) return (
+          <div style={{background:'#FEF3DC',border:'1.5px solid #D4892A',borderRadius:'var(--radius-lg)',padding:'0.75rem 1rem',marginBottom:'1rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div>
+              <div style={{fontWeight:800,color:'#8A5200',fontSize:'0.82rem'}}>📋 Aucun inventaire enregistré</div>
+              <div style={{fontSize:'0.72rem',color:'#8A5200',marginTop:2}}>Fais ton premier inventaire pour démarrer le suivi</div>
+            </div>
+          </div>
+        )
+        const daysSince = Math.floor((new Date() - new Date(lastInv+'T00:00:00')) / (1000*60*60*24))
+        if (daysSince >= 7) return (
+          <div style={{background:'#FEF3DC',border:'1.5px solid #D4892A',borderRadius:'var(--radius-lg)',padding:'0.75rem 1rem',marginBottom:'1rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div>
+              <div style={{fontWeight:800,color:'#8A5200',fontSize:'0.82rem'}}>📋 Inventaire à faire</div>
+              <div style={{fontSize:'0.72rem',color:'#8A5200',marginTop:2}}>Dernier inventaire : {format(new Date(lastInv+'T00:00:00'),'d MMM yyyy',{locale:fr})} ({daysSince}j)</div>
+            </div>
+          </div>
+        )
+        return (
+          <div style={{background:'#E8F5E9',border:'1.5px solid #A3D4B0',borderRadius:'var(--radius-lg)',padding:'0.6rem 1rem',marginBottom:'1rem',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div style={{fontSize:'0.75rem',color:'#1A5C4A',fontWeight:700}}>
+              ✓ Inventaire à jour — {format(new Date(lastInv+'T00:00:00'),'d MMM yyyy',{locale:fr})} ({daysSince}j)
+            </div>
+          </div>
+        )
+      })()}
 
       {alertes.length>0 && (
         <div style={{background:'#FDEEEC',border:'1.5px solid #F5C6C0',borderRadius:'var(--radius-lg)',padding:'0.75rem 1rem',marginBottom:'1rem'}}>
@@ -280,7 +319,7 @@ function TabInventaire({ isManager, profile }) {
       : periodeMensuel(new Date(periodeDate.getFullYear(),periodeDate.getMonth()-1))
 
     const [
-      {data:si},{data:existing},{data:prevInv},{data:fmtData},{data:mvt},{data:pertes}
+      {data:si},{data:existing},{data:prevInv},{data:fmtData},{data:mvt},{data:pertes},{data:mpActif}
     ] = await Promise.all([
       supabase.from('stock_items').select('*').eq('active',true).order('category').order('name'),
       supabase.from('stock_inventaires').select('*').eq('periode',periode).eq('periode_type',typeInv),
@@ -288,6 +327,7 @@ function TabInventaire({ isManager, profile }) {
       supabase.from('matiere_formats').select('*').eq('actif',true).order('poids'),
       supabase.from('stock_movements').select('item_id,qty').eq('type','reception').gte('created_at',dateFrom),
       supabase.from('stock_pertes').select('item_name,qte').gte('date_perte',dateFrom),
+      supabase.from('matiere_premiere').select('matiere').eq('actif',true),
     ])
 
     const fmtMap={}
@@ -297,13 +337,20 @@ function TabInventaire({ isManager, profile }) {
     for (const m of (mvt||[])) recuMap[m.item_id]=(recuMap[m.item_id]||0)+parseFloat(m.qty||0)
     for (const p of (pertes||[])) pertesMap[p.item_name]=(pertesMap[p.item_name]||0)+parseFloat(p.qte||0)
 
-    const enriched=(si||[]).map(item=>({
-      ...item,
-      debut:       prevMap[item.name] ?? parseFloat(item.current_qty||0),
-      receptions:  recuMap[item.id]||0,
-      perdus:      pertesMap[item.name]||0,
-      itemFmts:    fmtMap[norm(item.matiere_ref||item.name)]||[],
-    }))
+    const activeMpNames = new Set((mpActif||[]).map(m=>norm(m.matiere)))
+
+    const enriched=(si||[])
+      .filter(item => {
+        if (!item.matiere_ref) return true // pas lié à une matière → afficher quand même
+        return activeMpNames.has(norm(item.matiere_ref))
+      })
+      .map(item=>({
+        ...item,
+        debut:       prevMap[item.name] ?? parseFloat(item.current_qty||0),
+        receptions:  recuMap[item.id]||0,
+        perdus:      pertesMap[item.name]||0,
+        itemFmts:    fmtMap[norm(item.matiere_ref||item.name)]||[],
+      }))
 
     const invMap={}
     for (const i of (existing||[])) invMap[i.item_name]={qty_native:i.qte_physique,qty_formats:{}}
@@ -396,6 +443,15 @@ function TabInventaire({ isManager, profile }) {
         </div>
       </div>
 
+      {/* DATE DERNIER INVENTAIRE */}
+      {Object.keys(inv).length > 0 && (() => {
+        const dates = Object.values(inv).filter(v=>v.qty_native!==undefined&&v.qty_native!=='')
+        return dates.length > 0 ? (
+          <div style={{fontSize:'0.72rem',color:'var(--muted)',marginBottom:6,fontStyle:'italic'}}>
+            Inventaire en cours pour la période {periode}
+          </div>
+        ) : null
+      })()}
       {calcLoading && (
         <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 10px',background:'var(--outside-cream)',borderRadius:'var(--radius-md)',marginBottom:8,fontSize:'0.72rem',color:'var(--muted)',fontWeight:600}}>
           <Spinner size={11}/> Calcul consommation...
