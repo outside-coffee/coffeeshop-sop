@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth, hasRole } from '../hooks/useAuth'
 import { Spinner, Modal } from '../components/UI'
 import { Plus, Save, Trash2, Edit2, TrendingUp, TrendingDown } from 'lucide-react'
-import { format, subMonths } from 'date-fns'
+import { format, subMonths, endOfMonth } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 const CATEGORIES_CHARGES = ['Loyer','Electricite','Eau','Fournisseur','Marketing','Maintenance','Autre']
@@ -115,9 +115,8 @@ function TabResultat({ period, isAdmin }) {
 
   async function fetchData() {
     setLoading(true)
-    const [y, m] = period.split('-')
     const dateFrom = `${period}-01`
-    const dateTo   = new Date(parseInt(y), parseInt(m), 0).toISOString().slice(0, 10)
+    const dateTo   = format(endOfMonth(new Date(dateFrom)), 'yyyy-MM-dd')
 
     // CA — même logique exacte que Performance
     const DATE_CHG_DATE = new Date('2026-03-19T00:00:00')
