@@ -264,7 +264,7 @@ function FormatsModal({ matiere, onClose }) {
   }
 
   async function addFormat() {
-    if (!form.label || !form.quantite || !form.prix) return
+    if (!form.label || !form.poids || !form.prix) return
     setSaving(true)
 
     const { data } = await supabase.from('matiere_formats').insert({
@@ -334,7 +334,7 @@ function FormatsModal({ matiere, onClose }) {
               </div>
               {form.poids && form.prix && (
                 <div style={{ fontSize: '0.75rem', color: 'var(--outside-green)', fontWeight: 700, marginBottom: '0.6rem' }}>
-                  Prix unitaire : {(parseFloat(form.prix)/parseFloat(form.quantite)).toFixed(4)} DT/{matiere.unite}
+                  Prix unitaire : {(parseFloat(form.prix)/parseFloat(form.poids)).toFixed(4)} DT/{matiere.unite}
                 </div>
               )}
               <button className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center' }}
