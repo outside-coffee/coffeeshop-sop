@@ -145,6 +145,8 @@ function TabInventaire({ isManager, profile }) {
   useEffect(()=>{ loadData() },[periode])
 
   const [calcLoading, setCalcLoading] = useState(false)
+  const [debugLog, setDebugLog]       = useState([])
+  const addLog = msg => setDebugLog(prev => [...prev, msg])
 
   async function loadData() {
     setLoading(true)
@@ -205,14 +207,14 @@ function TabInventaire({ isManager, profile }) {
 
   async function calcConsoTheo(baseItems, mpMap) {
     // Utilise la vue SQL v_conso_theorique — 1 seule requête rapide
-    console.log('calcConsoTheo dateFrom:', dateFrom, 'dateTo:', dateTo)
+    addLog('Période: '+dateFrom+' → '+dateTo)
     const { data: consoData, error: consoError } = await supabase
       .from('v_conso_theorique')
       .select('matiere, qte_theo')
       .gte('date_vente', dateFrom)
       .lte('date_vente', dateTo)
-    console.log('consoData rows:', consoData?.length, 'error:', consoError)
-    if (consoData?.length > 0) console.log('sample:', consoData.slice(0,3))
+    addLog('Rows: '+(consoData?.length||0)+' error: '+(consoError?.message||'none'))
+    if (consoData?.length>0) addLog('Ex: '+consoData[0].matiere+' = '+consoData[0].qte_theo)
 
     // Agréger par matière — avec normalisation des accents
     const norm = s => s?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()||''
@@ -293,6 +295,12 @@ function TabInventaire({ isManager, profile }) {
       {calcLoading && (
         <div style={{display:'flex',alignItems:'center',gap:6,padding:'6px 12px',background:'var(--outside-cream)',borderRadius:'var(--radius-md)',marginBottom:8,fontSize:'0.75rem',color:'var(--muted)',fontWeight:600}}>
           <Spinner size={12}/> Calcul de la consommation théorique...
+        </div>
+      )}
+      {debugLog.length > 0 && (
+        <div style={{background:'#1D3A3A',borderRadius:'var(--radius-md)',padding:'8px 12px',marginBottom:8,fontSize:'0.65rem',color:'#A0C4B0',fontFamily:'monospace',maxHeight:120,overflowY:'auto'}}>
+          {debugLog.map((l,i) => <div key={i}>{l}</div>)}
+          <button onClick={()=>setDebugLog([])} style={{marginTop:4,background:'var(--outside-orange)',color:'white',border:'none',borderRadius:4,padding:'2px 8px',cursor:'pointer',fontSize:'0.65rem'}}>Fermer</button>
         </div>
       )}
       {loading ? <div style={{display:'flex',justifyContent:'center',padding:'2rem'}}><Spinner size={24}/></div> : (
