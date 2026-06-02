@@ -174,7 +174,8 @@ function TabMouvements({ isManager, profile }) {
     setFormats(prev=>({...prev,[item.id]:matched}))
   }
 
-  async function saveReception({item,qty,prix,fournisseur,note,factureFile}) {
+  async function saveReception(form) {
+    const {item,qty,prix,fournisseur,note,factureFile} = form
     setSaving(true)
     let facture_url = null
     if (factureFile) {
@@ -183,7 +184,7 @@ function TabMouvements({ isManager, profile }) {
       const { data } = await supabase.storage.from('factures').upload(path, factureFile)
       if (data) facture_url = data.path
     }
-    await supabase.from('stock_movements').insert({item_id:item.id,qty:parseFloat(qty),type:'reception',note,fournisseur,facture_url,created_by:profile?.id})
+    await supabase.from('stock_movements').insert({item_id:item.id,qty:parseFloat(qty),type:'reception',note,fournisseur,facture_url,created_by:profile?.id,created_at:form.date_reception+'T12:00:00'})
     await supabase.from('stock_items').update({current_qty:parseFloat(item.current_qty||0)+parseFloat(qty),updated_at:new Date().toISOString()}).eq('id',item.id)
     await loadData(); setSaving(false); setModal(null)
   }
@@ -501,7 +502,7 @@ function TabInventaire({ isManager, profile }) {
 
 // ── MODAL RÉCEPTION ───────────────────────────────────────────────────────
 function ReceptionModal({items,formats,fetchFormats,onClose,onSave,saving}) {
-  const [form,setForm]=useState({item:null,qty:'',prix:'',fournisseur:'',note:'',factureFile:null})
+  const [form,setForm]=useState({item:null,qty:'',prix:'',fournisseur:'',note:'',factureFile:null,date_reception:format(new Date(),'yyyy-MM-dd')})
   const [selFmt,setSelFmt]=useState(null)
   const [fmtQty,setFmtQty]=useState('1')
   const set=(k,v)=>setForm(p=>({...p,[k]:v}))
@@ -554,6 +555,9 @@ function ReceptionModal({items,formats,fetchFormats,onClose,onSave,saving}) {
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem'}}>
         <div className="form-group"><label className="form-label">Quantité ({form.item?.unit||''})</label><input className="form-input" type="number" value={form.qty} onChange={e=>set('qty',e.target.value)}/></div>
         <div className="form-group"><label className="form-label">Prix (DT)</label><input className="form-input" type="number" step="0.01" value={form.prix} onChange={e=>set('prix',e.target.value)}/></div>
+      </div>
+      <div className="form-group"><label className="form-label">Date de réception</label>
+        <input className="form-input" type="date" value={form.date_reception} onChange={e=>set('date_reception',e.target.value)}/>
       </div>
       <div className="form-group"><label className="form-label">Fournisseur</label><input className="form-input" value={form.fournisseur} onChange={e=>set('fournisseur',e.target.value)}/></div>
       <div className="form-group"><label className="form-label">Note</label><input className="form-input" value={form.note} onChange={e=>set('note',e.target.value)}/></div>
