@@ -20,7 +20,7 @@ export default function Dashboard() {
   async function fetchDashboard() {
     const today = format(new Date(), 'yyyy-MM-dd')
 
-    const [sessionsRes, templatesRes, stockRes, reportsRes] = await Promise.all([
+    const [sessionsRes, templatesRes, stockRes, reportsRes, invRes] = await Promise.all([
       supabase.from('checklist_sessions')
         .select('*, profiles(name, avatar_color)')
         .eq('date', today),
@@ -34,10 +34,15 @@ export default function Dashboard() {
         .select('*, profiles(name, avatar_color)')
         .eq('date', today)
         .order('created_at', { ascending: false }),
+      supabase.from('stock_inventaires')
+        .select('date_inventaire')
+        .order('date_inventaire', { ascending: false })
+        .limit(1),
     ])
 
     const sessions  = sessionsRes.data  || []
     const templates = templatesRes.data || []
+    const lastInv   = invRes.data?.[0]?.date_inventaire || null
     const items     = stockRes.data     || []
     const reports   = reportsRes.data   || []
 
@@ -67,7 +72,7 @@ export default function Dashboard() {
     // Rapport du jour + consignes passation
     const latestReport = reports[0] || null
 
-    setData({
+    setData({ lastInv,
       today,
       opening: {
         session:  openingSession,
