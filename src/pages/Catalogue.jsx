@@ -267,15 +267,21 @@ function FormatsModal({ matiere, onClose }) {
     if (!form.label || !form.poids || !form.prix) return
     setSaving(true)
 
-    const { data } = await supabase.from('matiere_formats').insert({
+    const { data, error } = await supabase.from('matiere_formats').insert({
       matiere:   matiere.matiere,
       label:     form.label,
       poids:     parseFloat(form.poids),
       prix:      parseFloat(form.prix),
       actif:     true,
     }).select().single()
+
+    if (error) {
+      alert('Erreur: ' + error.message)
+      setSaving(false)
+      return
+    }
     if (data) setFormats(prev => [...prev, data])
-    setForm({ label: '', quantite: '', prix: '' })
+    setForm({ label: '', poids: '', prix: '' })
     setSaving(false)
   }
 
