@@ -376,14 +376,19 @@ function TabInventaire({ isManager, profile }) {
         const f=item.itemFmts?.find(x=>x.id===parseInt(fid))
         return s+(f?parseFloat(n||0)*parseFloat(f.poids||0):0)
       },0)
-      return {...p,[name]:{qty_native:total>0?String(parseFloat(total.toFixed(2))):'',qty_formats:newFmts}}
+      // Si au moins un format a été saisi (même 0), on garde la valeur
+      const hasAnySaisie = Object.values(newFmts).some(n => n !== '' && n !== undefined)
+      return {...p,[name]:{qty_native: hasAnySaisie ? String(parseFloat(total.toFixed(2))) : '',qty_formats:newFmts}}
     })
   }
 
   async function saveInventaire() {
     setSaving(true)
     for (const item of items) {
-      const qte=inv[item.name]?.qty_native
+      const entry = inv[item.name]
+      if (!entry) continue
+      // Accepter 0 et les valeurs numériques, rejeter seulement undefined/''
+      const qte = entry.qty_native
       if (qte===undefined||qte==='') continue
       const calc=stockCalc[item.name]
       const theo=calc?.stockCalc??(item.debut+item.receptions-item.perdus)
