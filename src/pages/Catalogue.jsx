@@ -95,6 +95,10 @@ function MatieresTab() {
       alert(error.message || 'Erreur lors de la modification')
       return
     }
+    // Sync stock_items.active avec l'état de la matière
+    await supabase.from('stock_items')
+      .update({ active: newVal })
+      .eq('matiere_ref', item.matiere)
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, actif: newVal } : i))
   }
 
