@@ -330,82 +330,75 @@ function TabInventaire({ isManager, profile }) {
             <div style={{textAlign:'center'}}>Écart</div>
           </div>
 
-          {categories.map(cat=>(
-            <div key={cat} style={{marginBottom:'0.75rem'}}>
-              <div style={{fontSize:'0.62rem',fontWeight:800,textTransform:'uppercase',color:'var(--outside-orange)',padding:'4px 0 2px'}}>{cat}</div>
-              <div className="card">
-                {items.filter(i=>i.category===cat).map((item,idx,arr)=>{
-                  const qtePhysique = inv[item.name]?.qty_native ?? ''
-                  const calc  = stockCalc[item.name]
-                  const stCalc = calc?.stockCalc ?? (item.debut + item.receptions - item.perdus)
-                  const ecart = qtePhysique !== '' ? parseFloat(qtePhysique) - stCalc : null
-                  const fmts  = item.itemFmts || []
-                  const fmtQtys = inv[item.name]?.qty_formats || {}
-
-                  return (
-                    <div key={item.id} style={{borderBottom:idx<arr.length-1?'1.5px solid var(--outside-cream)':'none'}}>
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 80px 100px 60px',gap:6,padding:'0.65rem 1rem',alignItems:'center'}}>
-                        {/* NOM */}
-                        <div>
-                          <div style={{fontWeight:700,fontSize:'0.82rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name}</div>
-                          <div style={{fontSize:'0.6rem',color:'var(--muted)',marginTop:1}}>
-                            Début: {item.debut} · +{item.receptions}
-                            {calc?.conso > 0 && <span style={{color:'var(--outside-orange)'}}> −{calc.conso}</span>}
-                            {item.perdus > 0 && <span style={{color:'var(--danger)'}}> −{item.perdus}</span>}
-                          </div>
-                        </div>
-
-                        {/* STOCK CALCULÉ */}
-                        <div style={{textAlign:'center'}}>
-                          <div style={{fontWeight:800,fontSize:'0.85rem',color:calc?.hasCompo?'var(--outside-dark)':'var(--muted)'}}>{stCalc.toFixed(0)}</div>
-                          <div style={{fontSize:'0.55rem',color:'var(--muted)'}}>{item.unit}</div>
-                        </div>
-
-                        {/* SAISIE */}
-                        <div>
-                          {fmts.length === 0 ? (
-                            // Pas de format — saisie directe
-                            <input type="number" min="0" step="0.1" value={qtePhysique}
-                              onChange={e=>setQty(item.name, e.target.value)}
-                              placeholder={stCalc.toFixed(0)}
-                              style={{width:'100%',textAlign:'center',fontWeight:800,fontSize:'0.82rem',
-                                border:`1.5px solid ${ecart!==null?(Math.abs(ecart)<1?'var(--outside-green)':ecart<0?'var(--danger)':'var(--outside-amber)'):'var(--outside-cream2)'}`,
-                                borderRadius:'var(--radius-sm)',padding:'4px',fontFamily:'var(--font-body)',outline:'none'}}/>
-                          ) : (
-                            // Saisie par format
-                            <div style={{display:'flex',flexDirection:'column',gap:3}}>
-                              {fmts.map(fmt=>(
-                                <div key={fmt.id} style={{display:'flex',alignItems:'center',gap:4}}>
-                                  <input type="number" min="0" step="1" value={fmtQtys[fmt.id]||''}
-                                    onChange={e=>setFormatQty(item.name, fmt.id, e.target.value, fmt.poids)}
-                                    style={{width:36,textAlign:'center',fontWeight:800,fontSize:'0.75rem',
-                                      border:'1.5px solid var(--outside-orange)',borderRadius:4,padding:'2px',
-                                      fontFamily:'var(--font-body)',outline:'none'}}/>
-                                  <span style={{fontSize:'0.65rem',color:'var(--muted)',whiteSpace:'nowrap'}}>{fmt.label}</span>
-                                </div>
-                              ))}
-                              {qtePhysique && (
-                                <div style={{fontSize:'0.65rem',fontWeight:800,color:'var(--outside-dark)'}}>= {qtePhysique} {item.unit}</div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* ÉCART */}
-                        <div style={{textAlign:'center'}}>
-                          <div style={{fontWeight:800,fontSize:'0.82rem',
-                            color:ecart===null?'var(--muted)':Math.abs(ecart)<1?'var(--outside-green)':ecart<0?'var(--danger)':'var(--outside-amber)'}}>
-                            {ecart===null?'—':(ecart>0?'+':'')+ecart.toFixed(0)}
-                          </div>
-                          {ecart !== null && <div style={{fontSize:'0.55rem',color:'var(--muted)'}}>{item.unit}</div>}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+          <div className="card" style={{marginBottom:'1rem'}}>
+            {/* EN-TÊTE */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 64px 120px 52px',gap:4,padding:'5px 12px',background:'var(--outside-dark)',borderRadius:'var(--radius-lg) var(--radius-lg) 0 0',fontSize:'0.6rem',fontWeight:800,textTransform:'uppercase',color:'rgba(255,255,255,0.5)'}}>
+              <div>Article</div>
+              <div style={{textAlign:'center'}}>Calc.</div>
+              <div style={{textAlign:'center'}}>Réel</div>
+              <div style={{textAlign:'center'}}>Écart</div>
             </div>
-          ))}
+
+            {items.map((item,idx)=>{
+              const qtePhysique = inv[item.name]?.qty_native ?? ''
+              const calc    = stockCalc[item.name]
+              const stCalc  = calc?.stockCalc ?? (item.debut + item.receptions - item.perdus)
+              const ecart   = qtePhysique !== '' ? parseFloat(qtePhysique) - stCalc : null
+              const fmts    = item.itemFmts || []
+              const fmtQtys = inv[item.name]?.qty_formats || {}
+              const isNewCat = idx === 0 || items[idx-1].category !== item.category
+
+              return (
+                <div key={item.id}>
+                  {isNewCat && (
+                    <div style={{padding:'4px 12px',background:'var(--outside-cream)',fontSize:'0.6rem',fontWeight:800,textTransform:'uppercase',color:'var(--outside-orange)',borderTop:idx>0?'1.5px solid var(--outside-cream2)':'none'}}>
+                      {item.category}
+                    </div>
+                  )}
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 64px 120px 52px',gap:4,padding:'8px 12px',borderTop:'1px solid var(--outside-cream)',alignItems:'center'}}>
+
+                    {/* NOM */}
+                    <div style={{fontWeight:700,fontSize:'0.82rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name}</div>
+
+                    {/* CALC */}
+                    <div style={{textAlign:'center',fontWeight:800,fontSize:'0.85rem',color:calc?.hasCompo?'var(--outside-dark)':'var(--muted)'}}>{stCalc.toFixed(0)}</div>
+
+                    {/* SAISIE */}
+                    <div>
+                      {fmts.length === 0 ? (
+                        <input type="number" min="0" step="0.1" value={qtePhysique}
+                          onChange={e=>setQty(item.name, e.target.value)}
+                          placeholder="—"
+                          style={{width:'100%',textAlign:'center',fontWeight:800,fontSize:'0.85rem',
+                            border:`2px solid ${ecart!==null?(Math.abs(ecart)<1?'var(--outside-green)':ecart<0?'var(--danger)':'var(--outside-amber)'):'var(--outside-cream2)'}`,
+                            borderRadius:'var(--radius-md)',padding:'5px 4px',fontFamily:'var(--font-body)',outline:'none',background:'white'}}/>
+                      ) : (
+                        <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                          {fmts.map(fmt=>(
+                            <div key={fmt.id} style={{display:'flex',alignItems:'center',gap:4}}>
+                              <input type="number" min="0" step="1" value={fmtQtys[fmt.id]||''}
+                                onChange={e=>setFormatQty(item.name, fmt.id, e.target.value, fmt.poids)}
+                                style={{width:38,textAlign:'center',fontWeight:800,fontSize:'0.82rem',
+                                  border:'2px solid var(--outside-orange)',borderRadius:'var(--radius-md)',padding:'4px 2px',
+                                  fontFamily:'var(--font-body)',outline:'none'}}/>
+                              <span style={{fontSize:'0.62rem',color:'var(--muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:60}}>{fmt.label}</span>
+                            </div>
+                          ))}
+                          {qtePhysique && <div style={{fontSize:'0.62rem',fontWeight:800,color:'var(--outside-green)'}}>= {qtePhysique} {item.unit}</div>}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* ÉCART */}
+                    <div style={{textAlign:'center',fontWeight:800,fontSize:'0.82rem',
+                      color:ecart===null?'var(--muted)':Math.abs(ecart)<1?'var(--outside-green)':ecart<0?'var(--danger)':'var(--outside-amber)'}}>
+                      {ecart===null?'—':(ecart>0?'+':'')+ecart.toFixed(0)}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </>
       )}
     </>
