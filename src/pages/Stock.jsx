@@ -439,72 +439,92 @@ function TabInventaire({ isManager, profile }) {
 
       {loading ? <div style={{display:'flex',justifyContent:'center',padding:'3rem'}}><Spinner size={24}/></div> : (
         <div className="card">
-          {/* HEADER */}
-          <div style={{display:'grid',gridTemplateColumns:'minmax(90px,1fr) 52px minmax(90px,1fr) 46px',gap:4,padding:'5px 12px',background:'var(--outside-dark)',borderRadius:'var(--radius-lg) var(--radius-lg) 0 0',fontSize:'0.58rem',fontWeight:800,textTransform:'uppercase',color:'rgba(255,255,255,0.5)'}}>
-            <div>Article</div>
-            <div style={{textAlign:'center'}}>Calc.</div>
-            <div style={{textAlign:'center'}}>Réel</div>
-            <div style={{textAlign:'center'}}>Écart</div>
-          </div>
-
-          {items.map((item,idx)=>{
-            const qty=inv[item.name]?.qty_native??''
-            const calc=stockCalc[item.name]
-            const stCalc=calc?.stockCalc??(item.debut+item.receptions-item.perdus)
-            const ecart=qty!==''?parseFloat(qty)-stCalc:null
-            const fmts=item.itemFmts||[]
-            const fmtQtys=inv[item.name]?.qty_formats||{}
-            const isNewCat=idx===0||items[idx-1].category!==item.category
-            const borderColor=ecart===null?'var(--outside-cream2)':Math.abs(ecart)<1?'var(--outside-green)':ecart<0?'var(--danger)':'var(--outside-amber)'
+{items.map((item,idx)=>{
+            const qty      = inv[item.name]?.qty_native??''
+            const calc     = stockCalc[item.name]
+            const stCalc   = calc ? calc.stockCalc : (item.debut+item.receptions-item.perdus)
+            const ecart    = qty!=='' ? parseFloat(qty)-stCalc : null
+            const fmts     = item.itemFmts||[]
+            const fmtQtys  = inv[item.name]?.qty_formats||{}
+            const isNewCat = idx===0 || items[idx-1].category!==item.category
+            const ecartColor = ecart===null ? 'var(--outside-cream2)' : Math.abs(ecart)<1 ? '#27AE60' : ecart<0 ? '#E74C3C' : '#E67E22'
 
             return (
               <div key={item.id}>
+                {/* SÉPARATEUR CATÉGORIE */}
                 {isNewCat && (
-                  <div style={{padding:'3px 12px',background:'var(--outside-cream)',fontSize:'0.6rem',fontWeight:800,textTransform:'uppercase',color:'var(--outside-orange)',borderTop:idx>0?'1px solid var(--outside-cream2)':'none'}}>
+                  <div style={{padding:'5px 14px',background:'var(--outside-cream)',fontSize:'0.6rem',fontWeight:800,textTransform:'uppercase',color:'var(--outside-orange)',letterSpacing:'0.05em',borderTop:idx>0?'2px solid var(--outside-cream2)':'none'}}>
                     {item.category}
                   </div>
                 )}
-                <div style={{display:'grid',gridTemplateColumns:'minmax(90px,1fr) 52px minmax(90px,1fr) 46px',gap:4,padding:'8px 12px',borderTop:'1px solid var(--outside-cream)',alignItems:'center'}}>
-                  {/* NOM */}
-                  <div style={{fontWeight:700,fontSize:'0.82rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name}</div>
 
-                  {/* CALC */}
-                  <div style={{textAlign:'center',fontWeight:800,fontSize:'0.82rem',color:calc?.hasCompo?'var(--outside-dark)':'var(--muted)'}}>{stCalc.toFixed(0)}</div>
+                {/* LIGNE ARTICLE */}
+                <div style={{padding:'10px 14px',borderTop:'1px solid var(--outside-cream)',background:qty!==''?'white':'#FAFAFA'}}>
+                  {/* NOM + STOCK CALC */}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:6}}>
+                    <div style={{fontWeight:700,fontSize:'0.9rem',color:'var(--outside-dark)',flex:1,paddingRight:8}}>{item.name}</div>
+                    <div style={{fontSize:'0.72rem',color:calc?.hasCompo?'var(--outside-dark)':'var(--muted)',fontWeight:600,flexShrink:0}}>
+                      Calc: <strong>{stCalc.toFixed(0)}</strong> {item.unit}
+                    </div>
+                  </div>
 
                   {/* SAISIE */}
-                  <div>
-                    {fmts.length===0 ? (
-                      <input type="number" min="0" step="0.1" value={qty}
-                        onChange={e=>setQty(item.name,e.target.value)} placeholder="—"
-                        style={{width:'100%',textAlign:'center',fontWeight:800,fontSize:'0.85rem',
-                          border:`2px solid ${borderColor}`,borderRadius:'var(--radius-md)',padding:'5px 4px',
-                          fontFamily:'var(--font-body)',outline:'none',background:'white'}}/>
-                    ) : (
-                      <div style={{display:'flex',flexDirection:'column',gap:3}}>
-                        {fmts.map(fmt=>(
-                          <div key={fmt.id} style={{display:'flex',alignItems:'center',gap:4}}>
-                            <button onClick={()=>setFormatQty(item.name,fmt.id,String(Math.max(0,(parseInt(fmtQtys[fmt.id]||0)-1))),item)}
-                              style={{width:22,height:22,borderRadius:'50%',border:'1.5px solid var(--outside-cream2)',background:'white',fontWeight:800,cursor:'pointer',fontSize:'0.9rem',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>−</button>
-                            <input type="number" min="0" step="1" value={fmtQtys[fmt.id]||''}
+                  {fmts.length===0 ? (
+                    /* Saisie directe */
+                    <div style={{display:'flex',alignItems:'center',gap:8}}>
+                      <input
+                        type="number" min="0" step="0.1"
+                        value={qty}
+                        onChange={e=>setQty(item.name,e.target.value)}
+                        placeholder="Saisir quantité"
+                        inputMode="decimal"
+                        style={{flex:1,textAlign:'center',fontWeight:800,fontSize:'1rem',
+                          height:44,border:`2px solid ${ecartColor}`,borderRadius:'var(--radius-md)',
+                          padding:'6px 8px',fontFamily:'var(--font-body)',outline:'none',background:'white'}}/>
+                      <div style={{fontSize:'0.78rem',color:'var(--muted)',fontWeight:600,flexShrink:0}}>{item.unit}</div>
+                      {ecart!==null && (
+                        <div style={{minWidth:48,textAlign:'right',fontWeight:800,fontSize:'0.85rem',color:ecartColor,flexShrink:0}}>
+                          {ecart>0?'+':''}{ecart.toFixed(0)}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    /* Saisie par formats */
+                    <div>
+                      {fmts.map(fmt=>(
+                        <div key={fmt.id} style={{display:'flex',alignItems:'center',gap:8,marginBottom:5}}>
+                          <span style={{fontSize:'0.78rem',color:'var(--outside-dark)',fontWeight:600,flex:1}}>{fmt.label}</span>
+                          <div style={{display:'flex',alignItems:'center',gap:0,background:'var(--outside-cream)',borderRadius:'var(--radius-md)',overflow:'hidden',border:'1.5px solid var(--outside-cream2)'}}>
+                            <button
+                              onClick={()=>setFormatQty(item.name,fmt.id,String(Math.max(0,(parseInt(fmtQtys[fmt.id]||0)-1))),item)}
+                              style={{width:40,height:40,border:'none',background:'transparent',fontWeight:800,cursor:'pointer',fontSize:'1.2rem',color:'var(--outside-dark)'}}>−</button>
+                            <input
+                              type="number" min="0" step="1"
+                              value={fmtQtys[fmt.id]??''}
                               onChange={e=>setFormatQty(item.name,fmt.id,e.target.value,item)}
-                              style={{width:34,textAlign:'center',fontWeight:800,fontSize:'0.82rem',
-                                border:`2px solid ${borderColor}`,borderRadius:'var(--radius-sm)',padding:'3px',
-                                fontFamily:'var(--font-body)',outline:'none'}}/>
-                            <button onClick={()=>setFormatQty(item.name,fmt.id,String((parseInt(fmtQtys[fmt.id]||0)+1)),item)}
-                              style={{width:22,height:22,borderRadius:'50%',border:'1.5px solid var(--outside-cream2)',background:'white',fontWeight:800,cursor:'pointer',fontSize:'0.9rem',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>+</button>
-                            <span style={{fontSize:'0.6rem',color:'var(--muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:50}}>{fmt.label}</span>
+                              inputMode="numeric"
+                              style={{width:48,textAlign:'center',fontWeight:800,fontSize:'1rem',
+                                border:'none',borderLeft:'1.5px solid var(--outside-cream2)',borderRight:'1.5px solid var(--outside-cream2)',
+                                padding:'6px 2px',fontFamily:'var(--font-body)',outline:'none',background:'white',height:40}}/>
+                            <button
+                              onClick={()=>setFormatQty(item.name,fmt.id,String((parseInt(fmtQtys[fmt.id]||0)+1)),item)}
+                              style={{width:40,height:40,border:'none',background:'transparent',fontWeight:800,cursor:'pointer',fontSize:'1.2rem',color:'var(--outside-dark)'}}>+</button>
                           </div>
-                        ))}
-                        {qty && <div style={{fontSize:'0.65rem',fontWeight:800,color:'var(--outside-green)'}}>= {qty} {item.unit}</div>}
+                        </div>
+                      ))}
+                      {/* Total + écart */}
+                      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:2}}>
+                        <div style={{fontSize:'0.78rem',color:qty?'var(--outside-green)':'var(--muted)',fontWeight:700}}>
+                          {qty ? `= ${qty} ${item.unit}` : '—'}
+                        </div>
+                        {ecart!==null && (
+                          <div style={{fontWeight:800,fontSize:'0.85rem',color:ecartColor}}>
+                            Écart: {ecart>0?'+':''}{ecart.toFixed(0)} {item.unit}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-
-                  {/* ÉCART */}
-                  <div style={{textAlign:'center',fontWeight:800,fontSize:'0.82rem',
-                    color:ecart===null?'var(--muted)':Math.abs(ecart)<1?'var(--outside-green)':ecart<0?'var(--danger)':'var(--outside-amber)'}}>
-                    {ecart===null?'—':(ecart>0?'+':'')+ecart.toFixed(0)}
-                  </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -538,7 +558,7 @@ function ReceptionModal({items,formats,fetchFormats,onClose,onSave,saving}) {
     <Modal open onClose={onClose} title="Nouvelle réception"
       footer={<><button className="btn btn-outline" onClick={onClose}>Annuler</button><button className="btn btn-primary" disabled={!form.item||!form.qty||saving} onClick={()=>onSave(form)}>{saving?<Spinner size={16}/>:<Save size={15}/>} Enregistrer</button></>}>
       <div className="form-group"><label className="form-label">Article</label>
-        <select className="form-select" value={form.item?.id||''} onChange={e=>{const it=items.find(i=>i.id===parseInt(e.target.value));set('item',it||null);setSelFmt(null);setFmtQty('1')}}>
+        <select className="form-select" value={form.item?.id||''} onChange={e=>{const val=e.target.value;const it=items.find(i=>String(i.id)===String(val));set('item',it||null);setSelFmt(null);setFmtQty('1')}}>
           <option value="">— Choisir —</option>
           {items.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}
         </select>
@@ -585,7 +605,7 @@ function PerteModal({items,onClose,onSave,saving}) {
     <Modal open onClose={onClose} title="Déclarer une perte"
       footer={<><button className="btn btn-outline" onClick={onClose}>Annuler</button><button style={{background:'var(--danger)',color:'white',borderRadius:'var(--radius-md)',padding:'8px 16px',fontWeight:700,border:'none',cursor:'pointer'}} disabled={!form.item||!form.qte||!form.motif||saving} onClick={()=>onSave(form)}>{saving?<Spinner size={16}/>:'−'} Enregistrer</button></>}>
       <div className="form-group"><label className="form-label">Article</label>
-        <select className="form-select" value={form.item?.id||''} onChange={e=>set('item',items.find(i=>i.id===parseInt(e.target.value))||null)}>
+        <select className="form-select" value={form.item?.id||''} onChange={e=>{const val=e.target.value;set('item',items.find(i=>String(i.id)===String(val))||null)}}>
           <option value="">— Choisir —</option>
           {items.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}
         </select>
