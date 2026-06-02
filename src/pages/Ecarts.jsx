@@ -1,26 +1,16 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { Spinner } from '../components/UI'
-import { format, startOfMonth, endOfMonth, subMonths, subWeeks, startOfWeek, endOfWeek } from 'date-fns'
+import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, subWeeks } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { ChevronRight, Download, Filter, FileText } from 'lucide-react'
+import { Download } from 'lucide-react'
 
-function fmt(n) {
-  if (n == null) return '—'
-  const v = parseFloat(n)
-  return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(v)
-}
-function fmtDT(n) {
-  if (n == null) return '—'
-  const v = parseFloat(n)
-  return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(v) + ' DT'
-}
-function fmtDT2(n) {
-  if (n == null) return '—'
-  const v = parseFloat(n)
-  return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v) + ' DT'
-}
-function pct(a, b) { return b === 0 ? null : ((a - b) / b * 100).toFixed(1) }
+// ── HELPERS ───────────────────────────────────────────────────────────────
+const f1 = n => n == null ? '—' : parseFloat(n).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+const fDT = n => n == null ? '—' : parseFloat(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' DT'
+const pct = (a, b) => b === 0 ? null : ((a - b) / b * 100).toFixed(1)
+const norm = s => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim() || ''
+
 function ecartColor(p) {
   if (p == null) return 'var(--muted)'
   const v = parseFloat(p)
@@ -30,542 +20,342 @@ function ecartColor(p) {
   return 'var(--ink)'
 }
 
-const today     = new Date()
+const today = new Date()
 const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+
 const PERIODES = [
-  { label: 'Ce mois',    from: format(startOfMonth(today), 'yyyy-MM-dd'), to: format(yesterday, 'yyyy-MM-dd') },
+  { label: 'Ce mois',    from: format(startOfMonth(today), 'yyyy-MM-dd'),            to: format(yesterday, 'yyyy-MM-dd') },
   { label: 'M-1',        from: format(startOfMonth(subMonths(today,1)), 'yyyy-MM-dd'), to: format(endOfMonth(subMonths(today,1)), 'yyyy-MM-dd') },
-  { label: 'S en cours', from: format(startOfWeek(today, { weekStartsOn: 1 }), 'yyyy-MM-dd'), to: format(yesterday, 'yyyy-MM-dd') },
-  { label: 'S-1',        from: format(startOfWeek(subWeeks(today,1), { weekStartsOn: 1 }), 'yyyy-MM-dd'), to: format(endOfWeek(subWeeks(today,1), { weekStartsOn: 1 }), 'yyyy-MM-dd') },
+  { label: 'S en cours', from: format(startOfWeek(today, {weekStartsOn:1}), 'yyyy-MM-dd'), to: format(yesterday, 'yyyy-MM-dd') },
+  { label: 'S-1',        from: format(startOfWeek(subWeeks(today,1), {weekStartsOn:1}), 'yyyy-MM-dd'), to: format(endOfWeek(subWeeks(today,1), {weekStartsOn:1}), 'yyyy-MM-dd') },
 ]
 
 export default function Ecarts() {
-  const [step, setStep]         = useState(1)
-  const [loading, setLoading]   = useState(false)
   const [dateFrom, setDateFrom] = useState(PERIODES[0].from)
   const [dateTo,   setDateTo]   = useState(PERIODES[0].to)
-  const [matieres, setMatieres] = useState([])
-  const [selected, setSelected] = useState(new Set()) // matières sélectionnées
-  const [showFilter, setShowFilter] = useState(false)
-  const [stockDebut, setStockDebut] = useState({})
-  const [stockFin,   setStockFin]   = useState({})
-  const [resultats,  setResultats]  = useState([])
+  const [loading, setLoading]   = useState(false)
+  const [resultats, setResultats] = useState([])
+  const [loaded, setLoaded]     = useState(false)
+  const [sortBy, setSortBy]     = useState('ecart_pct') // 'ecart_pct' | 'nom' | 'cout'
+  const [filterActif, setFilterActif] = useState(true)
 
-  async function chargerMatieres() {
+  // Charger automatiquement au montage
+  useEffect(() => { charger() }, [])
+
+  async function charger() {
     setLoading(true)
 
-    // 1. Ventes — pagination (toutes tables incluses, conso perso comprise)
-    let ventes = [], page = 0
-    while (true) {
-      const { data: batch } = await supabase
-        .from('transaction_line').select('produit, qte')
-        .gte('date_vente', dateFrom).lte('date_vente', dateTo)
-        .range(page * 1000, (page + 1) * 1000 - 1)
-      if (!batch || batch.length === 0) break
-      ventes = ventes.concat(batch)
-      if (batch.length < 1000) break
-      page++
-    }
+    // 1. Conso théorique depuis vue
+    const { data: consoData } = await supabase
+      .from('v_conso_theorique').select('matiere, qte_theo, cout_theo')
+      .gte('date_vente', dateFrom).lte('date_vente', dateTo)
 
-    // 2. Composition
-    const { data: compoAll } = await supabase.from('composition_produit')
-      .select('nom_produit, matiere, quantite_m, unite, prix_achat, type')
+    // 2. Matières premières (prix unitaire)
+    const { data: mp } = await supabase
+      .from('matiere_premiere').select('matiere, prix, quantite, unite, actif')
 
-    // 3. Matières premières
-    const { data: mp } = await supabase.from('matiere_premiere')
-      .select('matiere, unite, prix, quantite')
-      .or('actif.eq.true,actif.is.null')
+    // 3. Inventaires dans la période — pour calculer conso réelle
+    // Conso réelle = inv_debut - inv_fin + réceptions - pertes
+    const { data: invData } = await supabase
+      .from('stock_inventaires').select('item_name, qte_physique, date_inventaire')
+      .gte('date_inventaire', dateFrom).lte('date_inventaire', dateTo)
+      .order('date_inventaire', { ascending: true })
 
-    if (!ventes || !compoAll || !mp) { setLoading(false); return }
+    // Inventaire précédant la période (stock début)
+    const { data: invAvant } = await supabase
+      .from('stock_inventaires').select('item_name, qte_physique, date_inventaire')
+      .lt('date_inventaire', dateFrom)
+      .order('date_inventaire', { ascending: false })
 
-    const mpMap = {}
-    for (const m of mp) {
-      // prix dans matiere_premiere = prix pour 'quantite' unités
-      // → on ramène au prix par unité réelle (g, ml, unité...)
-      const prixParUnite = m.quantite > 0 ? parseFloat(m.prix || 0) / parseFloat(m.quantite) : parseFloat(m.prix || 0)
-      mpMap[m.matiere] = { ...m, prixParUnite }
-    }
+    // 4. Réceptions de la période
+    const { data: receptions } = await supabase
+      .from('stock_movements').select('item_id, qty, stock_items(name, matiere_ref)')
+      .eq('type', 'reception')
+      .gte('created_at', dateFrom).lte('created_at', dateTo)
 
-    const compoProduit = compoAll.filter(c => c.type === 'produit fini')
-    const compoBase    = compoAll.filter(c => c.type === 'base')
+    // 5. Pertes de la période
+    const { data: pertes } = await supabase
+      .from('stock_pertes').select('item_name, qte, matiere_ref')
+      .gte('date_perte', dateFrom).lte('date_perte', dateTo)
 
-    const baseMap = {}
-    for (const c of compoBase) {
-      if (!baseMap[c.nom_produit]) baseMap[c.nom_produit] = []
-      baseMap[c.nom_produit].push(c)
-    }
+    // 6. Stock items pour liens matiere_ref
+    const { data: stockItems } = await supabase
+      .from('stock_items').select('id, name, matiere_ref')
 
-    // VenteMap avec trim+uppercase
-    const venteMap = {}
-    for (const v of ventes) {
-      const k = v.produit.trim().toUpperCase()
-      venteMap[k] = (venteMap[k] || 0) + v.qte
-    }
-
-    const normalizeStr = s => s.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-
-    const consoMap = {}
-    for (const c of compoProduit) {
-      const qteProd = venteMap[c.nom_produit.trim().toUpperCase()] || 0
-      if (qteProd === 0) continue
-
-      const nomMatiere = c.matiere.toUpperCase().trim()
-      const baseKey    = Object.keys(baseMap).find(k => normalizeStr(k) === normalizeStr(nomMatiere))
-
-      if (baseKey) {
-        const baseIngredients = baseMap[baseKey]
-        const qteBase   = parseFloat(c.quantite_m || 0)
-        const baseTotal = baseIngredients.reduce((s, bi) => s + parseFloat(bi.quantite_m || 0), 0)
-        const ratio     = baseTotal > 0 ? qteBase / baseTotal : qteBase / 1000
-        for (const bi of baseIngredients) {
-          const matiere    = bi.matiere
-          const consoTot   = qteProd * ratio * parseFloat(bi.quantite_m || 0)
-          const prixUnit   = parseFloat(bi.prix_achat || mpMap[matiere]?.prixParUnite || 0)
-          if (!consoMap[matiere]) consoMap[matiere] = { qte: 0, cout: 0, unite: bi.unite }
-          consoMap[matiere].qte  += consoTot
-          consoMap[matiere].cout += qteProd * ratio * prixUnit
-        }
-      } else {
-        const matiere  = c.matiere
-        const consoTot = qteProd * parseFloat(c.quantite_m || 0)
-        const prixUnit = parseFloat(c.prix_achat || mpMap[matiere]?.prixParUnite || 0)
-        if (!consoMap[matiere]) consoMap[matiere] = { qte: 0, cout: 0, unite: c.unite }
-        consoMap[matiere].qte  += consoTot
-        consoMap[matiere].cout += qteProd * prixUnit
+    // ── Construire les maps ───────────────────────────────────────────────
+    const mpMap = {} // matiere_norm → { prixUnit, unite, actif }
+    for (const m of (mp || [])) {
+      mpMap[norm(m.matiere)] = {
+        prixUnit: m.quantite > 0 ? m.prix / m.quantite : 0,
+        unite: m.unite, actif: m.actif !== false, nom: m.matiere
       }
     }
 
-    const list = Object.entries(consoMap)
-      .filter(([, v]) => v.qte > 0.01)
-      .filter(([matiere]) => mpMap[matiere] !== undefined) // exclure matières inactives (absentes de mpMap)
-      .map(([matiere, v]) => ({
-        matiere,
-        unite:        v.unite || mpMap[matiere]?.unite || '—',
-        consoTheo:    parseFloat(v.qte.toFixed(2)),
-        coutTheo:     parseFloat(v.cout.toFixed(3)),
-        prixUnitaire: mpMap[matiere]?.prixParUnite || null,
-      }))
-      .sort((a, b) => b.coutTheo - a.coutTheo)
+    // Conso théorique agrégée par matière normalisée
+    const consoTheoMap = {} // norm → { qte, cout }
+    for (const row of (consoData || [])) {
+      const k = norm(row.matiere)
+      consoTheoMap[k] = {
+        qte:  (consoTheoMap[k]?.qte  || 0) + parseFloat(row.qte_theo  || 0),
+        cout: (consoTheoMap[k]?.cout || 0) + parseFloat(row.cout_theo || 0),
+        nom:  row.matiere
+      }
+    }
 
-    const initStock = {}
-    list.forEach(m => { initStock[m.matiere] = '' })
+    // Lien stock_item → matiere_ref
+    const itemMatiereMap = {} // item_name_norm → matiere_norm
+    for (const si of (stockItems || [])) {
+      if (si.matiere_ref) itemMatiereMap[norm(si.name)] = norm(si.matiere_ref)
+    }
 
-    setMatieres(list)
-    setSelected(new Set(list.map(m => m.matiere))) // tout sélectionné par défaut
-    setStockDebut(initStock)
-    setStockFin(initStock)
-    setLoading(false)
-  }
+    // Réceptions par matière
+    const recuMap = {} // matiere_norm → qte
+    for (const r of (receptions || [])) {
+      const mRef = r.stock_items?.matiere_ref || r.stock_items?.name
+      if (!mRef) continue
+      const k = norm(mRef)
+      recuMap[k] = (recuMap[k] || 0) + parseFloat(r.qty || 0)
+    }
 
-  function toggleMatiere(matiere) {
-    setSelected(prev => {
-      const n = new Set(prev)
-      n.has(matiere) ? n.delete(matiere) : n.add(matiere)
-      return n
-    })
-  }
+    // Pertes par matière
+    const pertesMap = {} // matiere_norm → qte
+    for (const p of (pertes || [])) {
+      const mRef = p.matiere_ref || p.item_name
+      const k = norm(mRef)
+      pertesMap[k] = (pertesMap[k] || 0) + parseFloat(p.qte || 0)
+    }
 
-  function selectAll()  { setSelected(new Set(matieres.map(m => m.matiere))) }
-  function selectNone() { setSelected(new Set()) }
+    // Inventaire le plus récent AVANT la période (stock début)
+    const invDebutMap = {} // item_name_norm → qte
+    const seenAvant = new Set()
+    for (const i of (invAvant || [])) {
+      const k = norm(i.item_name)
+      if (!seenAvant.has(k)) { invDebutMap[k] = parseFloat(i.qte_physique || 0); seenAvant.add(k) }
+    }
 
-  const matieresFiltrees = matieres.filter(m => selected.has(m.matiere))
+    // Dernier inventaire dans la période (stock fin)
+    const invFinMap = {} // item_name_norm → qte
+    for (const i of (invData || [])) {
+      invFinMap[norm(i.item_name)] = parseFloat(i.qte_physique || 0)
+    }
 
-  function calculerResultats() {
-    const res = matieresFiltrees.map(m => {
-      const debut       = parseFloat(stockDebut[m.matiere]) || 0
-      const fin         = parseFloat(stockFin[m.matiere])   || 0
-      const consoReelle = parseFloat((debut - fin).toFixed(2))
-      const ecart       = parseFloat((consoReelle - m.consoTheo).toFixed(2))
-      const pctVal      = pct(consoReelle, m.consoTheo)
-      const coutEcart   = m.prixUnitaire ? parseFloat((ecart * m.prixUnitaire).toFixed(3)) : null
-      return { ...m, stockDebut: debut, stockFin: fin, consoReelle, ecart, pctEcart: pctVal, coutEcart }
-    })
-    const sorted = [...res].sort((a, b) => Math.abs(b.coutEcart || 0) - Math.abs(a.coutEcart || 0))
-    setResultats(sorted)
-    setStep(3)
-  }
-
-  // ── EXPORT PDF ────────────────────────────────────────────────────────
-  function exportPDF() {
-    const periode = `${format(new Date(dateFrom + 'T00:00:00'), "d MMM", { locale: fr })} → ${format(new Date(dateTo + 'T00:00:00'), "d MMM yyyy", { locale: fr })}`
-    const totalCoutTheo  = resultats.reduce((s, r) => s + r.coutTheo, 0)
-    const totalCoutEcart = resultats.reduce((s, r) => s + (r.coutEcart || 0), 0)
-
-    const rows = resultats.map(r => `
-      <tr class="${Math.abs(parseFloat(r.pctEcart || 0)) > 10 ? (parseFloat(r.pctEcart) > 0 ? 'alert-high' : 'alert-low') : ''}">
-        <td><strong>${r.matiere}</strong><br><small>${r.unite}</small></td>
-        <td class="num">${fmt(r.consoTheo)}</td>
-        <td class="num">${fmt(r.consoReelle)}</td>
-        <td class="num ${parseFloat(r.ecart || 0) > 0 ? 'red' : 'green'}">${r.ecart >= 0 ? '+' : ''}${fmt(r.ecart)}</td>
-        <td class="num ${parseFloat(r.pctEcart || 0) > 10 ? 'red' : parseFloat(r.pctEcart || 0) < -5 ? 'green' : ''}">${r.pctEcart ? (parseFloat(r.pctEcart) > 0 ? '+' : '') + r.pctEcart + '%' : '—'}</td>
-        <td class="num">${fmtDT(r.coutTheo)}</td>
-        <td class="num ${parseFloat(r.coutEcart || 0) > 0 ? 'red' : 'green'}">${r.coutEcart != null ? (r.coutEcart > 0 ? '+' : '') + fmtDT(r.coutEcart) : '—'}</td>
-      </tr>
-    `).join('')
-
-    const html = `<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<title>Écarts — ${periode}</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11px; color: #1D3A3A; padding: 24px; }
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; border-bottom: 2px solid #1D3A3A; padding-bottom: 12px; }
-  .header h1 { font-size: 20px; font-weight: 700; color: #1D3A3A; }
-  .header .periode { font-size: 12px; color: #5A7070; margin-top: 4px; }
-  .logo { font-size: 18px; font-weight: 900; color: #C4521A; }
-  .summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
-  .summary-card { background: #F2EDE4; border-radius: 8px; padding: 10px 14px; }
-  .summary-card .label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #5A7070; margin-bottom: 4px; }
-  .summary-card .value { font-size: 16px; font-weight: 700; }
-  .red { color: #B03A1A; }
-  .green { color: #1A5C4A; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: #1D3A3A; color: white; padding: 7px 10px; text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
-  th.num, td.num { text-align: right; }
-  td { padding: 7px 10px; border-bottom: 1px solid #F2EDE4; font-size: 10.5px; }
-  td small { color: #5A7070; font-size: 9px; }
-  tr.alert-high { background: #FFF8F5; }
-  tr.alert-low  { background: #F0FFF8; }
-  tr:last-child td { border-bottom: none; }
-  .total-row td { border-top: 2px solid #1D3A3A; font-weight: 700; background: #F2EDE4; }
-  @media print { body { padding: 12px; } }
-</style>
-</head>
-<body>
-  <div class="header">
-    <div>
-      <div class="logo">Outside ☕</div>
-      <h1>Contrôle des écarts</h1>
-      <div class="periode">${periode} · ${resultats.length} matières analysées</div>
-    </div>
-    <div style="text-align:right;font-size:10px;color:#5A7070">
-      Généré le ${format(new Date(), "d MMM yyyy 'à' HH:mm", { locale: fr })}
-    </div>
-  </div>
-
-  <div class="summary">
-    <div class="summary-card">
-      <div class="label">Coût théorique</div>
-      <div class="value">${fmtDT2(totalCoutTheo)}</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">Coût des écarts</div>
-      <div class="value ${totalCoutEcart > 0 ? 'red' : 'green'}">${totalCoutEcart > 0 ? '+' : ''}${fmtDT2(totalCoutEcart)}</div>
-    </div>
-    <div class="summary-card">
-      <div class="label">Alertes > 10%</div>
-      <div class="value ${resultats.filter(r => Math.abs(parseFloat(r.pctEcart||0))>10).length > 0 ? 'red' : 'green'}">${resultats.filter(r => Math.abs(parseFloat(r.pctEcart||0))>10).length} matière(s)</div>
-    </div>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Matière</th>
-        <th class="num">Conso Théo.</th>
-        <th class="num">Conso Réelle</th>
-        <th class="num">Écart</th>
-        <th class="num">% Écart</th>
-        <th class="num">Coût Théo.</th>
-        <th class="num">Coût Écart</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${rows}
-      <tr class="total-row">
-        <td><strong>TOTAL</strong></td>
-        <td></td><td></td><td></td><td></td>
-        <td class="num">${fmtDT2(totalCoutTheo)}</td>
-        <td class="num ${totalCoutEcart > 0 ? 'red' : 'green'}">${totalCoutEcart > 0 ? '+' : ''}${fmtDT2(totalCoutEcart)}</td>
-      </tr>
-    </tbody>
-  </table>
-</body>
-</html>`
-
-    const win = window.open('', '_blank')
-    win.document.write(html)
-    win.document.close()
-    win.onload = () => win.print()
-  }
-
-  // ── EXPORT CSV ────────────────────────────────────────────────────────
-  function exportCSV() {
-    const header = ['Matière','Unité','Conso Théo.','Conso Réelle','Écart','% Écart','Coût Théo. (DT)','Coût Écart (DT)','Stock Début','Stock Fin']
-    const rows = resultats.map(r => [
-      r.matiere, r.unite,
-      fmt(r.consoTheo), fmt(r.consoReelle),
-      `${r.ecart >= 0 ? '+' : ''}${fmt(r.ecart)}`,
-      r.pctEcart ? `${r.pctEcart}%` : '—',
-      fmtDT(r.coutTheo), r.coutEcart != null ? `${r.coutEcart > 0 ? '+' : ''}${fmtDT(r.coutEcart)}` : '—',
-      r.stockDebut, r.stockFin,
+    // ── Calculer les écarts pour chaque matière avec conso théorique ─────
+    const allMatieres = new Set([
+      ...Object.keys(consoTheoMap),
+      ...Object.keys(mpMap),
     ])
 
-    const totalCoutTheo  = resultats.reduce((s, r) => s + r.coutTheo, 0)
-    const totalCoutEcart = resultats.reduce((s, r) => s + (r.coutEcart || 0), 0)
+    const rows = []
+    for (const k of allMatieres) {
+      const info    = mpMap[k]
+      if (!info) continue
 
-    const csv = [
-      [`Contrôle des écarts — ${format(new Date(dateFrom + 'T00:00:00'), "d MMM", { locale: fr })} → ${format(new Date(dateTo + 'T00:00:00'), "d MMM yyyy", { locale: fr })}`],
-      [],
-      header,
-      ...rows,
-      [],
-      ['TOTAL','','','','','', fmtDT(totalCoutTheo), `${totalCoutEcart > 0 ? '+' : ''}${fmtDT(totalCoutEcart)}`],
-    ].map(row => row.join(';')).join('\n')
+      const consoTheo = consoTheoMap[k]?.qte || 0
+      if (consoTheo === 0) continue // Pas de conso = pas pertinent
 
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href     = url
-    a.download = `ecarts_${dateFrom}_${dateTo}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+      // Conso réelle = stock début + réceptions - stock fin - pertes
+      const stockDebut = invDebutMap[k] ?? null
+      const stockFin   = invFinMap[k]   ?? null
+      const recu       = recuMap[k]     || 0
+      const perdus     = pertesMap[k]   || 0
+
+      let consoReelle = null
+      if (stockDebut !== null && stockFin !== null) {
+        consoReelle = stockDebut + recu - stockFin - perdus
+      } else if (stockFin !== null) {
+        // Pas d'inventaire précédent — on utilise le stock calculé
+        consoReelle = recu - stockFin - perdus
+      }
+
+      const ecart    = consoReelle !== null ? consoTheo - consoReelle : null
+      const ecartPct = consoTheo > 0 && consoReelle !== null ? pct(consoTheo, consoReelle) : null
+      const prixUnit = info.prixUnit || 0
+      const coutTheo  = consoTheoMap[k]?.cout || consoTheo * prixUnit
+      const coutEcart = ecart !== null ? ecart * prixUnit : null
+
+      rows.push({
+        matiere:      info.nom || consoTheoMap[k]?.nom || k,
+        unite:        info.unite || '',
+        actif:        info.actif,
+        consoTheo:    parseFloat(consoTheo.toFixed(2)),
+        consoReelle:  consoReelle !== null ? parseFloat(consoReelle.toFixed(2)) : null,
+        stockDebut,
+        stockFin,
+        recu,
+        ecart:        ecart !== null ? parseFloat(ecart.toFixed(2)) : null,
+        ecartPct,
+        coutTheo:     parseFloat(coutTheo.toFixed(3)),
+        coutEcart:    coutEcart !== null ? parseFloat(coutEcart.toFixed(3)) : null,
+        prixUnit,
+        hasInventaire: stockFin !== null,
+      })
+    }
+
+    // Tri
+    rows.sort((a, b) => {
+      if (sortBy === 'nom') return a.matiere.localeCompare(b.matiere)
+      if (sortBy === 'cout') return (b.coutTheo || 0) - (a.coutTheo || 0)
+      // Par défaut: écart % absolu décroissant, sans inventaire à la fin
+      if (!a.hasInventaire && b.hasInventaire) return 1
+      if (a.hasInventaire && !b.hasInventaire) return -1
+      return Math.abs(parseFloat(b.ecartPct || 0)) - Math.abs(parseFloat(a.ecartPct || 0))
+    })
+
+    setResultats(rows)
+    setLoading(false)
+    setLoaded(true)
   }
 
-  const STEP_LABELS = ['1 · Inventaire début', '2 · Inventaire fin', '3 · Résultats']
+  const displayed = filterActif ? resultats.filter(r => r.actif) : resultats
+  const totalCoutTheo  = displayed.reduce((s, r) => s + (r.coutTheo || 0), 0)
+  const totalCoutEcart = displayed.filter(r => r.coutEcart).reduce((s, r) => s + (r.coutEcart || 0), 0)
+  const sansinventaire = displayed.filter(r => !r.hasInventaire).length
+
+  function downloadCSV() {
+    const rows = [['Matière','Unité','Conso théo.','Conso réelle','Écart qté','Écart %','Coût théo.','Coût écart']]
+    for (const r of displayed) {
+      rows.push([r.matiere, r.unite, r.consoTheo, r.consoReelle??'', r.ecart??'', r.ecartPct??'', r.coutTheo, r.coutEcart??''])
+    }
+    const csv = rows.map(r => r.map(c => '"'+String(c)+'"').join(';')).join('\n')
+    const blob = new Blob(['\uFEFF'+csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a'); a.href=url; a.download=`ecarts_${dateFrom}_${dateTo}.csv`; a.click()
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <>
       <div className="page-header">
-        <h1 className="page-title">Contrôle des écarts</h1>
-        <p className="page-subtitle">{format(new Date(), "EEE d MMM yyyy", { locale: fr })}</p>
+        <h1 className="page-title">Écarts</h1>
+        <p className="page-subtitle">Consommation théorique vs réelle</p>
       </div>
 
       <div className="page-content">
 
-        {/* STEPS */}
-        <div style={{ display: 'flex', gap: '4px', marginBottom: '1.25rem', overflowX: 'auto', scrollbarWidth: 'none', marginLeft: '-1rem', marginRight: '-1rem', paddingLeft: '1rem', paddingRight: '1rem' }}>
-          {STEP_LABELS.map((label, i) => (
-            <button key={i} onClick={() => i + 1 < step && setStep(i + 1)}
-              style={{ padding: '6px 14px', borderRadius: 'var(--radius-pill)', border: 'none', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: '0.8rem', whiteSpace: 'nowrap', flexShrink: 0, cursor: i + 1 < step ? 'pointer' : 'default', background: step === i + 1 ? 'var(--outside-orange)' : i + 1 < step ? 'var(--outside-cream2)' : 'var(--outside-cream)', color: step === i + 1 ? 'white' : 'var(--muted)' }}>
-              {label}
+        {/* FILTRES */}
+        <div className="card" style={{ padding: '0.75rem 1rem', marginBottom: '1rem' }}>
+          {/* Périodes rapides */}
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+            {PERIODES.map(p => (
+              <button key={p.label}
+                className={`btn btn-sm ${dateFrom===p.from&&dateTo===p.to?'btn-primary':'btn-outline'}`}
+                onClick={() => { setDateFrom(p.from); setDateTo(p.to) }}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {/* Dates personnalisées */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <input className="form-input" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ fontSize: '0.82rem' }}/>
+            <input className="form-input" type="date" value={dateTo}   onChange={e => setDateTo(e.target.value)}   style={{ fontSize: '0.82rem' }}/>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button className="btn btn-primary btn-sm" disabled={loading} onClick={charger}>
+              {loading ? <Spinner size={14}/> : '↻'} Calculer
             </button>
-          ))}
+            <button className={`btn btn-sm ${filterActif?'btn-primary':'btn-outline'}`} onClick={() => setFilterActif(v=>!v)}>
+              Actifs seulement
+            </button>
+            <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+              {['ecart_pct','cout','nom'].map(s => (
+                <button key={s} className={`btn btn-sm ${sortBy===s?'btn-primary':'btn-outline'}`} onClick={() => setSortBy(s)}>
+                  {s==='ecart_pct'?'% Écart':s==='cout'?'Coût':'Nom'}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* ── ÉTAPE 1 ──────────────────────────────────────────── */}
-        {step === 1 && (
-          <>
-            <div className="card" style={{ padding: '1rem', marginBottom: '1rem' }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--muted)', marginBottom: '0.75rem' }}>Période</div>
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-                {PERIODES.map(p => (
-                  <button key={p.label}
-                    className={`btn btn-sm ${dateFrom === p.from && dateTo === p.to ? 'btn-primary' : 'btn-outline'}`}
-                    onClick={() => { setDateFrom(p.from); setDateTo(p.to) }}>
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                <div>
-                  <label className="form-label">Du</label>
-                  <input className="form-input" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-                </div>
-                <div>
-                  <label className="form-label">Au</label>
-                  <input className="form-input" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-                </div>
-              </div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 600, marginBottom: '0.75rem', textAlign: 'center' }}>
-                {format(new Date(dateFrom + 'T00:00:00'), "d MMM", { locale: fr })} → {format(new Date(dateTo + 'T00:00:00'), "d MMM yyyy", { locale: fr })}
-              </div>
-              <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
-                onClick={chargerMatieres} disabled={loading}>
-                {loading ? <Spinner size={16} /> : '📊 Charger les matières'}
-              </button>
+        {/* MESSAGE SI PAS D'INVENTAIRE */}
+        {loaded && sansinventaire > 0 && (
+          <div style={{ background: '#FEF3DC', border: '1.5px solid #D4892A', borderRadius: 'var(--radius-lg)', padding: '0.75rem 1rem', marginBottom: '1rem', fontSize: '0.82rem' }}>
+            <strong style={{ color: '#8A5200' }}>ℹ {sansinventaire} matière{sansinventaire>1?'s':''} sans inventaire</strong>
+            <div style={{ color: '#8A5200', marginTop: 2, fontSize: '0.75rem' }}>
+              La conso réelle ne peut pas être calculée sans inventaire physique dans la période.
+              Fais un inventaire dans Stock → Inventaire pour voir les écarts réels.
             </div>
-
-            {matieres.length > 0 && (
-              <>
-                {/* FILTRE MATIÈRES */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 600 }}>
-                    {selected.size}/{matieres.length} matières sélectionnées
-                  </div>
-                  <button className={`btn btn-sm ${showFilter ? 'btn-primary' : 'btn-outline'}`}
-                    onClick={() => setShowFilter(s => !s)}>
-                    <Filter size={13} /> Filtrer
-                  </button>
-                </div>
-
-                {/* PANNEAU FILTRE */}
-                {showFilter && (
-                  <div className="card" style={{ padding: '1rem', marginBottom: '1rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                      <span style={{ fontSize: '0.78rem', fontWeight: 800 }}>Choisir les matières</span>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button className="btn btn-ghost btn-sm" onClick={selectAll}>Tout</button>
-                        <button className="btn btn-ghost btn-sm" onClick={selectNone}>Aucun</button>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '280px', overflowY: 'auto' }}>
-                      {matieres.map(m => (
-                        <label key={m.matiere} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 4px', cursor: 'pointer', borderRadius: 'var(--radius-sm)' }}>
-                          <input type="checkbox" checked={selected.has(m.matiere)}
-                            onChange={() => toggleMatiere(m.matiere)}
-                            style={{ width: 16, height: 16, accentColor: 'var(--outside-orange)', flexShrink: 0 }} />
-                          <span style={{ flex: 1, fontSize: '0.875rem', fontWeight: 600 }}>{m.matiere}</span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--outside-orange)', fontWeight: 800 }}>{fmtDT(m.coutTheo)}</span>
-                        </label>
-                      ))}
-                    </div>
-                    <button className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: '0.75rem' }}
-                      onClick={() => setShowFilter(false)}>
-                      Appliquer ({selected.size} matières)
-                    </button>
-                  </div>
-                )}
-
-                {/* TABLEAU ÉTAPE 1 */}
-                <div className="card">
-                  <div style={{ padding: '0.6rem 1rem', borderBottom: '1.5px solid var(--outside-cream)', display: 'grid', gridTemplateColumns: '1fr 70px 70px', gap: '8px' }}>
-                    <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>Matière</span>
-                    <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--outside-orange)', textAlign: 'right' }}>Conso théo.</span>
-                    <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', textAlign: 'center' }}>Début</span>
-                  </div>
-                  {matieresFiltrees.map((m, idx) => (
-                    <div key={m.matiere} style={{ padding: '0.7rem 1rem', borderBottom: idx < matieresFiltrees.length - 1 ? '1.5px solid var(--outside-cream)' : 'none', display: 'grid', gridTemplateColumns: '1fr 70px 70px', gap: '8px', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{m.matiere}</div>
-                        <div style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>{m.unite} · {fmtDT(m.coutTheo)}</div>
-                      </div>
-                      <div style={{ textAlign: 'right', fontWeight: 800, fontSize: '0.85rem', color: 'var(--outside-orange)' }}>{fmt(m.consoTheo)}</div>
-                      <input type="number" min="0" step="0.1" placeholder="0"
-                        value={stockDebut[m.matiere] || ''}
-                        onChange={e => setStockDebut(p => ({ ...p, [m.matiere]: e.target.value }))}
-                        style={{ width: '100%', textAlign: 'center', fontWeight: 800, fontSize: '0.9rem', border: '2px solid var(--outside-cream2)', borderRadius: 'var(--radius-sm)', padding: '4px 2px', fontFamily: 'var(--font-body)', color: 'var(--outside-dark)', outline: 'none', background: 'white' }} />
-                    </div>
-                  ))}
-                </div>
-                <button className="btn btn-primary btn-lg" style={{ width: '100%', justifyContent: 'center', marginTop: '1rem' }}
-                  onClick={() => setStep(2)} disabled={selected.size === 0}>
-                  Suivant : Inventaire fin <ChevronRight size={18} />
-                </button>
-              </>
-            )}
-          </>
+          </div>
         )}
 
-        {/* ── ÉTAPE 2 ──────────────────────────────────────────── */}
-        {step === 2 && (
+        {loading && <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}><Spinner size={28}/></div>}
+
+        {loaded && !loading && (
           <>
-            <div style={{ background: 'var(--outside-cream)', borderRadius: 'var(--radius-md)', padding: '8px 12px', marginBottom: '1rem', fontSize: '0.82rem', color: 'var(--muted)', fontWeight: 600 }}>
-              Stock physique compté en fin de période — {matieresFiltrees.length} matières
-            </div>
-            <div className="card">
-              <div style={{ padding: '0.6rem 1rem', borderBottom: '1.5px solid var(--outside-cream)', display: 'grid', gridTemplateColumns: '1fr 55px 70px', gap: '8px' }}>
-                <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>Matière</span>
-                <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', textAlign: 'center' }}>Début</span>
-                <span style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--outside-orange)', textAlign: 'center' }}>Fin</span>
-              </div>
-              {matieresFiltrees.map((m, idx) => (
-                <div key={m.matiere} style={{ padding: '0.7rem 1rem', borderBottom: idx < matieresFiltrees.length - 1 ? '1.5px solid var(--outside-cream)' : 'none', display: 'grid', gridTemplateColumns: '1fr 55px 70px', gap: '8px', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{m.matiere}</div>
-                    <div style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>{m.unite}</div>
-                  </div>
-                  <div style={{ textAlign: 'center', fontWeight: 700, fontSize: '0.85rem', color: 'var(--muted)' }}>{stockDebut[m.matiere] || '0'}</div>
-                  <input type="number" min="0" step="0.1" placeholder="0"
-                    value={stockFin[m.matiere] || ''}
-                    onChange={e => setStockFin(p => ({ ...p, [m.matiere]: e.target.value }))}
-                    style={{ width: '100%', textAlign: 'center', fontWeight: 800, fontSize: '0.9rem', border: '2px solid var(--outside-orange)', borderRadius: 'var(--radius-sm)', padding: '4px 2px', fontFamily: 'var(--font-body)', color: 'var(--outside-dark)', outline: 'none', background: '#FFF8F5' }} />
+            {/* TOTAUX */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: '1rem' }}>
+              {[
+                { label: 'Matières analysées', value: displayed.length, color: 'var(--outside-dark)' },
+                { label: 'Coût théorique', value: fDT(totalCoutTheo), color: 'var(--outside-green)' },
+                { label: 'Coût écart total', value: fDT(totalCoutEcart), color: totalCoutEcart > 0 ? 'var(--danger)' : 'var(--outside-green)' },
+              ].map(k => (
+                <div key={k.label} className="card" style={{ padding: '0.75rem' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', color: k.color, fontWeight: 400 }}>{k.value}</div>
+                  <div style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginTop: 2 }}>{k.label}</div>
                 </div>
               ))}
             </div>
-            <button className="btn btn-primary btn-lg" style={{ width: '100%', justifyContent: 'center', marginTop: '1rem' }}
-              onClick={calculerResultats}>
-              Calculer les écarts <ChevronRight size={18} />
-            </button>
-          </>
-        )}
 
-        {/* ── ÉTAPE 3 ──────────────────────────────────────────── */}
-        {step === 3 && (
-          <>
-            {/* RÉSUMÉ + EXPORT */}
-            {(() => {
-              const totalCoutTheo  = resultats.reduce((s, r) => s + r.coutTheo, 0)
-              const totalCoutEcart = resultats.reduce((s, r) => s + (r.coutEcart || 0), 0)
-              const nbAlerte       = resultats.filter(r => r.pctEcart && Math.abs(parseFloat(r.pctEcart)) > 10).length
-              return (
-                <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '1rem' }}>
-                    <div className="card" style={{ padding: '0.85rem' }}>
-                      <div style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Coût théo.</div>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem' }}>{fmtDT2(totalCoutTheo)}</div>
-                    </div>
-                    <div className="card" style={{ padding: '0.85rem' }}>
-                      <div style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Coût écarts</div>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: totalCoutEcart > 0 ? '#B03A1A' : '#1A5C4A' }}>
-                        {totalCoutEcart > 0 ? '+' : ''}{fmtDT2(Math.abs(totalCoutEcart))}
-                      </div>
-                    </div>
-                    <div className="card" style={{ padding: '0.85rem', gridColumn: '1 / -1', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '4px' }}>Alertes (&gt;10%)</div>
-                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', color: nbAlerte > 0 ? '#B03A1A' : '#1A5C4A' }}>{nbAlerte} matière{nbAlerte > 1 ? 's' : ''}</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 600, marginBottom: '6px' }}>
-                          {format(new Date(dateFrom + 'T00:00:00'), "d MMM", { locale: fr })} → {format(new Date(dateTo + 'T00:00:00'), "d MMM", { locale: fr })}
-                        </div>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button className="btn btn-outline btn-sm" onClick={exportCSV}>
-                            <Download size={14} /> CSV
-                          </button>
-                          <button className="btn btn-outline btn-sm" onClick={exportPDF}>
-                            <FileText size={14} /> PDF
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )
-            })()}
+            {/* BOUTON EXPORT */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
+              <button className="btn btn-outline btn-sm" onClick={downloadCSV}><Download size={13}/> CSV</button>
+            </div>
 
-            {/* TABLEAU RÉSULTATS */}
-            <div className="card" style={{ marginBottom: '1rem' }}>
-              {resultats.map((r, idx) => {
-                const pctNum  = r.pctEcart ? parseFloat(r.pctEcart) : 0
-                const isAlert = Math.abs(pctNum) > 10
+            {/* TABLEAU */}
+            <div className="card">
+              {/* Header */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 60px 60px 50px 60px', gap: 4, padding: '6px 12px', background: 'var(--outside-dark)', borderRadius: 'var(--radius-lg) var(--radius-lg) 0 0', fontSize: '0.58rem', fontWeight: 800, textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>
+                <div>Matière</div>
+                <div style={{ textAlign: 'center' }}>Théo.</div>
+                <div style={{ textAlign: 'center' }}>Réel</div>
+                <div style={{ textAlign: 'center' }}>Écart%</div>
+                <div style={{ textAlign: 'right' }}>Coût</div>
+              </div>
+
+              {displayed.length === 0 ? (
+                <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--muted)' }}>
+                  Aucune donnée — sélectionne une période et clique Calculer
+                </div>
+              ) : displayed.map((r, idx) => {
+                const ep = r.ecartPct != null ? parseFloat(r.ecartPct) : null
+                const color = ecartColor(ep)
                 return (
-                  <div key={r.matiere} style={{ padding: '0.85rem 1rem', borderBottom: idx < resultats.length - 1 ? '1.5px solid var(--outside-cream)' : 'none', background: isAlert ? (pctNum > 0 ? '#FFF8F5' : '#F0FFF8') : 'white' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>
-                        {r.matiere} <span style={{ fontSize: '0.65rem', color: 'var(--muted)', fontWeight: 600 }}>{r.unite}</span>
-                      </div>
-                      {r.pctEcart && (
-                        <div style={{ fontWeight: 800, fontSize: '0.8rem', color: ecartColor(r.pctEcart), background: isAlert ? (pctNum > 0 ? '#FDEEEC' : '#E0F2EB') : 'var(--outside-cream)', padding: '2px 8px', borderRadius: 'var(--radius-pill)' }}>
-                          {pctNum > 0 ? '+' : ''}{r.pctEcart}%
+                  <div key={r.matiere} style={{ display: 'grid', gridTemplateColumns: '1fr 60px 60px 50px 60px', gap: 4, padding: '7px 12px', borderTop: '1px solid var(--outside-cream)', alignItems: 'center' }}>
+                    {/* NOM */}
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.matiere}</div>
+                      {!r.hasInventaire && <div style={{ fontSize: '0.58rem', color: '#D4892A', fontWeight: 700 }}>Sans inventaire</div>}
+                    </div>
+                    {/* CONSO THEO */}
+                    <div style={{ textAlign: 'center', fontSize: '0.78rem', fontWeight: 700, color: 'var(--outside-dark)' }}>
+                      {f1(r.consoTheo)}
+                      <div style={{ fontSize: '0.55rem', color: 'var(--muted)' }}>{r.unite}</div>
+                    </div>
+                    {/* CONSO REELLE */}
+                    <div style={{ textAlign: 'center', fontSize: '0.78rem', fontWeight: 700, color: r.hasInventaire ? 'var(--outside-dark)' : 'var(--muted)' }}>
+                      {r.hasInventaire ? f1(r.consoReelle) : '—'}
+                      {r.hasInventaire && <div style={{ fontSize: '0.55rem', color: 'var(--muted)' }}>{r.unite}</div>}
+                    </div>
+                    {/* ÉCART % */}
+                    <div style={{ textAlign: 'center' }}>
+                      {ep != null ? (
+                        <div style={{ fontWeight: 800, fontSize: '0.78rem', color, background: color+'15', borderRadius: 4, padding: '1px 4px' }}>
+                          {ep > 0 ? '+' : ''}{ep}%
+                        </div>
+                      ) : <span style={{ color: 'var(--muted)', fontSize: '0.78rem' }}>—</span>}
+                    </div>
+                    {/* COÛT */}
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700 }}>{fDT(r.coutTheo)}</div>
+                      {r.coutEcart != null && Math.abs(r.coutEcart) > 0.01 && (
+                        <div style={{ fontSize: '0.62rem', color: r.coutEcart > 0 ? 'var(--danger)' : 'var(--outside-green)', fontWeight: 700 }}>
+                          {r.coutEcart > 0 ? '+' : ''}{fDT(r.coutEcart)}
                         </div>
                       )}
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '4px' }}>
-                      {[
-                        { l: 'Théo.',    v: fmt(r.consoTheo),   c: 'var(--muted)' },
-                        { l: 'Réel',     v: fmt(r.consoReelle), c: 'var(--ink)' },
-                        { l: 'Écart',    v: `${r.ecart >= 0 ? '+' : ''}${fmt(r.ecart)}`, c: ecartColor(r.pctEcart) },
-                        { l: 'Coût éc.', v: r.coutEcart != null ? `${r.coutEcart > 0 ? '+' : ''}${fmtDT(r.coutEcart)}` : '—', c: ecartColor(r.pctEcart) },
-                      ].map(cell => (
-                        <div key={cell.l}>
-                          <div style={{ fontSize: '0.58rem', color: 'var(--muted)', fontWeight: 800, textTransform: 'uppercase' }}>{cell.l}</div>
-                          <div style={{ fontSize: '0.78rem', fontWeight: 800, color: cell.c }}>{cell.v}</div>
-                        </div>
-                      ))}
                     </div>
                   </div>
                 )
               })}
             </div>
-
-            <button className="btn btn-outline" style={{ width: '100%', justifyContent: 'center' }}
-              onClick={() => { setStep(1); setResultats([]) }}>
-              Nouvelle analyse
-            </button>
           </>
         )}
       </div>
