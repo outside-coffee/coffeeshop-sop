@@ -51,18 +51,26 @@ export default function Ecarts() {
       {data:receptions},
       {data:pertes},
       {data:stockItems},
+      {data:bases},
     ] = await Promise.all([
       supabase.from('v_conso_theorique').select('matiere,qte_theo,cout_theo').gte('date_vente',dateFrom).lte('date_vente',dateTo),
-      supabase.from('matiere_premiere').select('matiere,prix,quantite,unite,actif'),
+      supabase.from('matiere_premiere').select('matiere,prix,quantite,unite,actif').eq('actif',true),
       supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire').gte('date_inventaire',dateFrom).lte('date_inventaire',dateTo).order('date_inventaire',{ascending:true}),
       supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire').lt('date_inventaire',dateFrom).order('date_inventaire',{ascending:false}),
       supabase.from('stock_movements').select('item_id,qty,stock_items(name,matiere_ref)').eq('type','reception').gte('created_at',dateFrom).lte('created_at',dateTo),
       supabase.from('stock_pertes').select('item_name,qte,matiere_ref').gte('date_perte',dateFrom).lte('date_perte',dateTo),
       supabase.from('stock_items').select('id,name,matiere_ref'),
+      supabase.from('composition_produit').select('nom_produit').eq('type','base'),
     ])
 
+    // Noms des bases à exclure
+    const baseNames = new Set((bases||[]).map(b=>norm(b.nom_produit)))
+
     const mpMap={}
-    for (const m of (mp||[])) mpMap[norm(m.matiere)]={prixUnit:m.quantite>0?m.prix/m.quantite:0,unite:m.unite,actif:m.actif!==false,nom:m.matiere}
+    for (const m of (mp||[])) {
+      if (baseNames.has(norm(m.matiere))) continue // exclure les bases
+      mpMap[norm(m.matiere)]={prixUnit:m.quantite>0?m.prix/m.quantite:0,unite:m.unite,actif:true,nom:m.matiere}
+    }
 
     const consoTheoMap={}
     for (const row of (consoData||[])) {
@@ -125,7 +133,7 @@ export default function Ecarts() {
       return Math.abs(parseFloat(b.ecartPct||0))-Math.abs(parseFloat(a.ecartPct||0))
     })
 
-    setRows(result.filter(r=>r.actif))
+    setRows(result)
     setLoading(false); setLoaded(true)
   }
 
