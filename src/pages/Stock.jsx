@@ -205,11 +205,14 @@ function TabInventaire({ isManager, profile }) {
 
   async function calcConsoTheo(baseItems, mpMap) {
     // Utilise la vue SQL v_conso_theorique — 1 seule requête rapide
-    const { data: consoData } = await supabase
+    console.log('calcConsoTheo dateFrom:', dateFrom, 'dateTo:', dateTo)
+    const { data: consoData, error: consoError } = await supabase
       .from('v_conso_theorique')
       .select('matiere, qte_theo')
       .gte('date_vente', dateFrom)
       .lte('date_vente', dateTo)
+    console.log('consoData rows:', consoData?.length, 'error:', consoError)
+    if (consoData?.length > 0) console.log('sample:', consoData.slice(0,3))
 
     // Agréger par matière — avec normalisation des accents
     const norm = s => s?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()||''
