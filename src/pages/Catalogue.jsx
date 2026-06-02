@@ -20,8 +20,6 @@ function MatieresTab() {
   const [fmtSaving, setFmtSaving]           = useState(false)
   const [showInactive, setShowInactive]         = useState(false)
   const [activeCategory, setActiveCategory]     = useState('all')
-  const [formatsModal, setFormatsModal]         = useState(null)
-
   useEffect(() => { fetchItems() }, [])
 
   async function fetchItems() {
@@ -260,7 +258,7 @@ function FormatsModal({ matiere, onClose }) {
 
   async function fetchFormats() {
     const { data } = await supabase.from('matiere_formats')
-      .select('*').eq('matiere', matiere.matiere).eq('actif', true).order('quantite')
+      .select('*').eq('matiere', matiere.matiere).eq('actif', true).order('poids')
     setFormats(data || [])
     setLoading(false)
   }
