@@ -53,7 +53,7 @@ function TabDashboard() {
   async function load() {
     const [{ data: si }, { data: mp }, { data: pertes }, { data: invLast }] = await Promise.all([
       supabase.from('stock_items').select('*').eq('active',true).order('category').order('name'),
-      supabase.from('matiere_premiere').select('matiere,prix,quantite').eq('actif',true),
+      supabase.from('matiere_premiere').select('matiere,prix,quantite').eq('actif',true).order('matiere'),
       supabase.from('stock_pertes').select('item_name,qte').gte('date_perte', format(startOfMonth(new Date()),'yyyy-MM-dd')),
       supabase.from('stock_inventaires').select('date_inventaire').order('date_inventaire',{ascending:false}).limit(1),
     ])
