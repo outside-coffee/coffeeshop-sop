@@ -121,7 +121,6 @@ function TabResultat({ period, isAdmin }) {
 
     // CA depuis transaction_line — même logique que Performance
     // prix_unitaire avec fallback total_ttc, toutes tables incluses
-    const DATE_CHG = '2026-03-19'
     let ventesCA = [], pageCA = 0
     while (true) {
       const { data: batch } = await supabase
@@ -130,9 +129,11 @@ function TabResultat({ period, isAdmin }) {
         .range(pageCA * 1000, (pageCA + 1) * 1000 - 1)
       if (!batch || batch.length === 0) break
       // Même filtre que Performance (exclure conso perso)
+      const DATE_CHG_DATE = new Date('2026-03-19')
       const filtered = batch.filter(l => {
+        const dateVente = new Date(l.date_vente)
         if (l.numtable === 32) return false
-        if (l.numtable === 22 && l.date_vente < DATE_CHG) return false
+        if (l.numtable === 22 && dateVente < DATE_CHG_DATE) return false
         return true
       })
       ventesCA = ventesCA.concat(filtered)
