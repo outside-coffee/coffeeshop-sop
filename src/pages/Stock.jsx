@@ -432,7 +432,15 @@ function TabInventaire({ isManager, profile }) {
         </div>
         <div style={{display:'flex',gap:4,alignItems:'center'}}>
           <button className="btn btn-ghost btn-sm" onClick={()=>setPeriodeDate(d=>typeInv==='hebdo'?subWeeks(d,1):new Date(d.getFullYear(),d.getMonth()-1))}>←</button>
-          <span style={{fontWeight:700,fontSize:'0.82rem',minWidth:80,textAlign:'center'}}>{periode}</span>
+          <div style={{textAlign:'center',minWidth:140}}>
+            <div style={{fontWeight:800,fontSize:'0.82rem'}}>{periode}</div>
+            <div style={{fontSize:'0.65rem',color:'var(--muted)',fontWeight:600}}>
+              {typeInv==='hebdo'
+                ? `${format(startOfWeek(periodeDate,{weekStartsOn:1}),'d MMM',{locale:fr})} → ${format(new Date(startOfWeek(periodeDate,{weekStartsOn:1}).getTime()+6*24*60*60*1000),'d MMM yyyy',{locale:fr})}`
+                : format(periodeDate,'MMMM yyyy',{locale:fr})
+              }
+            </div>
+          </div>
           <button className="btn btn-ghost btn-sm" onClick={()=>setPeriodeDate(d=>typeInv==='hebdo'?subWeeks(d,-1):new Date(d.getFullYear(),d.getMonth()+1))}>→</button>
         </div>
         <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
