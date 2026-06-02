@@ -34,11 +34,21 @@ function MatieresTab() {
 
   async function saveFormat(form) {
     setFmtSaving(true)
+    // Extraire seulement les colonnes valides
+    const payload = {
+      matiere: form.matiere,
+      label:   form.label,
+      poids:   parseFloat(form.poids),
+      prix:    parseFloat(form.prix),
+      actif:   true,
+    }
     if (form.id) {
-      await supabase.from('matiere_formats').update(form).eq('id', form.id)
-      setFormats(prev => prev.map(f => f.id === form.id ? { ...f, ...form } : f))
+      const { error } = await supabase.from('matiere_formats').update(payload).eq('id', form.id)
+      if (error) { alert('Erreur: '+error.message); setFmtSaving(false); return }
+      setFormats(prev => prev.map(f => f.id === form.id ? { ...f, ...payload } : f))
     } else {
-      const { data } = await supabase.from('matiere_formats').insert(form).select().single()
+      const { data, error } = await supabase.from('matiere_formats').insert(payload).select().single()
+      if (error) { alert('Erreur: '+error.message); setFmtSaving(false); return }
       if (data) setFormats(prev => [...prev, data])
     }
     setFmtSaving(false); setFmtModal(null)
