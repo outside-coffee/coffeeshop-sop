@@ -211,16 +211,21 @@ function TabInventaire({ isManager, profile }) {
       .gte('date_vente', dateFrom)
       .lte('date_vente', dateTo)
 
-    // Agréger par matière
-    const consoTheoMap = {}
+    // Agréger par matière — avec normalisation des accents
+    const norm = s => s?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()||''
+    const consoTheoMap = {}        // clé normalisée → qte
+    const consoTheoOrigMap = {}    // clé normalisée → nom original
     for (const row of (consoData||[])) {
-      consoTheoMap[row.matiere] = (consoTheoMap[row.matiere]||0) + parseFloat(row.qte_theo||0)
+      const k = norm(row.matiere)
+      consoTheoMap[k] = (consoTheoMap[k]||0) + parseFloat(row.qte_theo||0)
+      consoTheoOrigMap[k] = row.matiere
     }
 
     setItems(prev => prev.map(item => {
       const mRef = item.matiere_ref
-      const conso = mRef ? (consoTheoMap[mRef]||0) : 0
-      const hasCompo = mRef && consoTheoMap[mRef] !== undefined
+      const mRefNorm = norm(mRef)
+      const conso = mRef ? (consoTheoMap[mRefNorm]||0) : 0
+      const hasCompo = mRef && consoTheoMap[mRefNorm] !== undefined
       const stockTheo = Math.max(0, item.stockDebut + item.receptions - conso - item.pertesDec)
       return { ...item, consoTheo: parseFloat(conso.toFixed(2)), hasCompo, stockTheo: parseFloat(stockTheo.toFixed(2)) }
     }))
