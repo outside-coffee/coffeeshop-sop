@@ -119,28 +119,26 @@ function TabResultat({ period, isAdmin }) {
     const dateFrom = `${period}-01`
     const dateTo   = new Date(parseInt(y), parseInt(m), 0).toISOString().slice(0, 10)
 
-    // CA depuis transaction_line — même logique que Performance
-    // prix_unitaire avec fallback total_ttc, toutes tables incluses
-    let ventesCA = [], pageCA = 0
+    // CA depuis transaction_line — exclure conso perso (table 32, table 22 avant 2026-03-19)
+    // Paginer sur le brut SANS filtre JS pour ne pas rater des pages
+    let ca = 0, pageCA = 0
+    const DATE_CHG_DATE = new Date('2026-03-19')
     while (true) {
       const { data: batch } = await supabase
         .from('transaction_line').select('prix_unitaire, total_ttc, numtable, date_vente')
         .gte('date_vente', dateFrom).lte('date_vente', dateTo)
         .range(pageCA * 1000, (pageCA + 1) * 1000 - 1)
       if (!batch || batch.length === 0) break
-      // Même filtre que Performance (exclure conso perso)
-      const DATE_CHG_DATE = new Date('2026-03-19')
-      const filtered = batch.filter(l => {
+      for (const l of batch) {
         const dateVente = new Date(l.date_vente)
-        if (l.numtable === 32) return false
-        if (l.numtable === 22 && dateVente < DATE_CHG_DATE) return false
-        return true
-      })
-      ventesCA = ventesCA.concat(filtered)
+        if (l.numtable === 32) continue
+        if (l.numtable === 22 && dateVente < DATE_CHG_DATE) continue
+        ca += parseFloat(l.prix_unitaire || l.total_ttc || 0)
+      }
       if (batch.length < 1000) break
       pageCA++
     }
-    const ca = ventesCA.reduce((s, v) => s + parseFloat(v.prix_unitaire || v.total_ttc || 0), 0)
+    ca = parseFloat(ca.toFixed(2))
 
     // Charges
     const { data: charges } = await supabase
