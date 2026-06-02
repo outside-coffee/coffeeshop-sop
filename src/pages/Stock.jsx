@@ -207,14 +207,14 @@ function TabInventaire({ isManager, profile }) {
     // Utilise la vue SQL v_conso_theorique — 1 seule requête rapide
     const { data: consoData } = await supabase
       .from('v_conso_theorique')
-      .select('matiere, qte_conso')
+      .select('matiere, qte_theo')
       .gte('date_vente', dateFrom)
       .lte('date_vente', dateTo)
 
     // Agréger par matière
     const consoTheoMap = {}
     for (const row of (consoData||[])) {
-      consoTheoMap[row.matiere] = (consoTheoMap[row.matiere]||0) + parseFloat(row.qte_conso||0)
+      consoTheoMap[row.matiere] = (consoTheoMap[row.matiere]||0) + parseFloat(row.qte_theo||0)
     }
 
     setItems(prev => prev.map(item => {
