@@ -141,6 +141,9 @@ function TabInventaire({ isManager, profile }) {
   const dateFrom = typeInv==='hebdo'
     ? format(startOfWeek(periodeDate,{weekStartsOn:1}),'yyyy-MM-dd')
     : format(startOfMonth(periodeDate),'yyyy-MM-dd')
+  const dateTo = typeInv==='hebdo'
+    ? format(new Date(startOfWeek(periodeDate,{weekStartsOn:1}).getTime()+6*24*60*60*1000),'yyyy-MM-dd')
+    : format(endOfMonth(periodeDate),'yyyy-MM-dd')
 
   useEffect(()=>{ loadData() },[periode])
 
