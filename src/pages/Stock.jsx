@@ -146,13 +146,124 @@ function TabInventaire({ isManager, profile }) {
 
   async function loadData() {
     setLoading(true)
-    const [{ data: si }, { data: existing }] = await Promise.all([
+
+    // Inventaire précédent pour stock début de période
+    const prevPeriode = typeInv === 'hebdo'
+      ? periodeHebdo(subWeeks(periodeDate, 1))
+      : periodeMensuel(new Date(periodeDate.getFullYear(), periodeDate.getMonth()-1))
+
+    const [
+      { data: si },
+      { data: existing },
+      { data: prevInv },
+      { data: mpData },
+      { data: compoData },
+      { data: mvt },
+      { data: pertes },
+    ] = await Promise.all([
       supabase.from('stock_items').select('*').eq('active',true).order('category').order('name'),
       supabase.from('stock_inventaires').select('*').eq('periode',periode).eq('periode_type',typeInv),
+      supabase.from('stock_inventaires').select('item_name,qte_physique').eq('periode',prevPeriode).eq('periode_type',typeInv),
+      supabase.from('matiere_premiere').select('matiere,prix,quantite,unite').or('actif.eq.true,actif.is.null'),
+      supabase.from('composition_produit').select('nom_produit,matiere,quantite_m,prix_achat,type'),
+      supabase.from('stock_movements').select('item_id,qty,type').eq('type','reception').gte('created_at',dateFrom),
+      supabase.from('stock_pertes').select('item_name,qte').gte('date_perte',dateFrom),
     ])
-    const invMap={}
-    for (const i of (existing||[])) invMap[i.item_name]=i.qte_physique
-    setItems(si||[])
+
+    // Maps utiles
+    const prevInvMap = {}
+    for (const i of (prevInv||[])) prevInvMap[i.item_name] = parseFloat(i.qte_physique||0)
+
+    const mpMap = {}
+    for (const m of (mpData||[])) mpMap[m.matiere] = { prixUnit: m.quantite>0?m.prix/m.quantite:0, unite: m.unite }
+
+    const receptionsMap = {}
+    for (const m of (mvt||[])) receptionsMap[m.item_id] = (receptionsMap[m.item_id]||0) + parseFloat(m.qty||0)
+
+    const pertesMap = {}
+    for (const p of (pertes||[])) pertesMap[p.item_name] = (pertesMap[p.item_name]||0) + parseFloat(p.qte||0)
+
+    // Calcul conso théorique depuis ventes × compositions
+    const norm = s => s?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()||''
+
+    // Récupérer les ventes de la période
+    let ventes = [], pageV = 0
+    while (true) {
+      const { data: batch } = await supabase
+        .from('transaction_line').select('produit,qte')
+        .gte('date_vente', dateFrom).lte('date_vente', dateTo)
+        .range(pageV*1000, (pageV+1)*1000-1)
+      if (!batch||batch.length===0) break
+      ventes = ventes.concat(batch)
+      if (batch.length<1000) break
+      pageV++
+    }
+
+    // Agréger ventes par produit
+    const venteMap = {}
+    for (const v of ventes) {
+      const key = norm(v.produit)
+      venteMap[key] = (venteMap[key]||0) + parseFloat(v.qte||0)
+    }
+
+    // Construire baseMap et produitMap depuis compositions
+    const baseMap = {}, produitMap = {}
+    for (const c of (compoData||[])) {
+      const key = norm(c.nom_produit)
+      if (c.type==='base') { if(!baseMap[key])baseMap[key]=[]; baseMap[key].push(c) }
+      else { if(!produitMap[key])produitMap[key]=[]; produitMap[key].push(c) }
+    }
+
+    // Calculer conso théorique par matière (en grammes/ml/unité)
+    const consoTheoMap = {} // { matiere_name: qte_consommée }
+    for (const [prodNorm, qteVendue] of Object.entries(venteMap)) {
+      const ingredients = produitMap[prodNorm]||[]
+      for (const c of ingredients) {
+        const matiereNorm = norm(c.matiere)
+        const baseKey = Object.keys(baseMap).find(k=>k===matiereNorm)
+        if (baseKey) {
+          const baseIngredients = baseMap[baseKey]
+          const baseTotal = baseIngredients.reduce((s,bi)=>s+parseFloat(bi.quantite_m||0),0)
+          const ratio = baseTotal>0 ? parseFloat(c.quantite_m)/baseTotal : 0
+          for (const bi of baseIngredients) {
+            const mRef = Object.keys(mpMap).find(k=>norm(k)===norm(bi.matiere))||bi.matiere
+            consoTheoMap[mRef] = (consoTheoMap[mRef]||0) + qteVendue * ratio * parseFloat(bi.quantite_m||0)
+          }
+        } else {
+          const mRef = Object.keys(mpMap).find(k=>norm(k)===norm(c.matiere))||c.matiere
+          consoTheoMap[mRef] = (consoTheoMap[mRef]||0) + qteVendue * parseFloat(c.quantite_m||0)
+        }
+      }
+    }
+
+    // Calculer stock théorique par item
+    const enriched = (si||[]).map(item => {
+      const prevStock   = prevInvMap[item.name] ?? parseFloat(item.current_qty||0)
+      const receptions  = receptionsMap[item.id]||0
+      const pertesDec   = pertesMap[item.name]||0
+      // Conso théorique depuis ventes (si matiere_ref défini)
+      const mRef        = item.matiere_ref
+      const consoTheo   = mRef ? (consoTheoMap[mRef]||0) : 0
+      const hasCompo    = mRef && consoTheoMap[mRef] !== undefined
+      const stockTheo   = Math.max(0, prevStock + receptions - consoTheo - pertesDec)
+
+      return {
+        ...item,
+        stockDebut:   prevStock,
+        receptions,
+        consoTheo:    parseFloat(consoTheo.toFixed(2)),
+        pertesDec,
+        stockTheo:    parseFloat(stockTheo.toFixed(2)),
+        hasCompo,
+        prixUnit:     mpMap[mRef]?.prixUnit || 0,
+      }
+    })
+
+    // Inventaire existant
+    const invMap = {}
+    for (const i of (existing||[])) invMap[i.item_name] = i.qte_physique
+
+    setItems(enriched)
     setInv(invMap)
     setLoading(false)
   }
@@ -214,27 +325,17 @@ function TabInventaire({ isManager, profile }) {
 
       {loading ? <div style={{display:'flex',justifyContent:'center',padding:'2rem'}}><Spinner size={24}/></div> : (
         <>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 80px 80px 70px',gap:6,padding:'6px 1rem',background:'var(--outside-cream)',borderRadius:'var(--radius-md)',marginBottom:4,fontSize:'0.62rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)'}}>
-            <div>Article</div><div style={{textAlign:'center'}}>Théorique</div><div style={{textAlign:'center'}}>Physique</div><div style={{textAlign:'center'}}>Écart</div>
-          </div>
           {categories.map(cat=>(
             <div key={cat} style={{marginBottom:'0.75rem'}}>
               <div style={{fontSize:'0.62rem',fontWeight:800,textTransform:'uppercase',color:'var(--outside-orange)',padding:'4px 0 2px'}}>{cat}</div>
               <div className="card">
                 {items.filter(i=>i.category===cat).map((item,idx,arr)=>{
-                  const physique=inv[item.name]??''
-                  const ecart=physique!==''?parseFloat(physique)-parseFloat(item.current_qty):null
+                  const physique = inv[item.name] ?? ''
+                  const ecart = physique !== '' ? parseFloat(physique) - item.stockTheo : null
                   return (
-                    <div key={item.id} style={{display:'grid',gridTemplateColumns:'1fr 80px 80px 70px',gap:6,padding:'0.6rem 1rem',borderBottom:idx<arr.length-1?'1.5px solid var(--outside-cream)':'none',alignItems:'center'}}>
-                      <div><div style={{fontWeight:700,fontSize:'0.82rem'}}>{item.name}</div><div style={{fontSize:'0.65rem',color:'var(--muted)'}}>{item.unit}</div></div>
-                      <div style={{textAlign:'center',fontWeight:700,fontSize:'0.82rem',color:'var(--muted)'}}>{item.current_qty}</div>
-                      <input type="number" min="0" step="0.1" value={physique}
-                        onChange={e=>setInv(prev=>({...prev,[item.name]:e.target.value}))}
-                        style={{textAlign:'center',fontWeight:800,fontSize:'0.82rem',border:`1.5px solid ${ecart!==null?(ecart<0?'var(--danger)':ecart>0?'var(--outside-amber)':'var(--outside-green)'):'var(--outside-cream2)'}`,borderRadius:'var(--radius-sm)',padding:'4px',fontFamily:'var(--font-body)',outline:'none',width:'100%'}}/>
-                      <div style={{textAlign:'center',fontWeight:800,fontSize:'0.82rem',color:ecart===null?'var(--muted)':ecart<0?'var(--danger)':ecart>0?'var(--outside-amber)':'var(--outside-green)'}}>
-                        {ecart===null?'—':(ecart>0?'+':'')+ecart.toFixed(0)}
-                      </div>
-                    </div>
+                    <InventaireRow key={item.id} item={item} physique={physique} ecart={ecart}
+                      isLast={idx===arr.length-1}
+                      onChange={val => setInv(prev=>({...prev,[item.name]:val}))} />
                   )
                 })}
               </div>
@@ -473,5 +574,106 @@ function PerteModal({ items, onClose, onSave, saving }) {
         <input className="form-input" value={form.motif_detail} onChange={e=>set('motif_detail',e.target.value)} placeholder="Précision..."/>
       </div>
     </Modal>
+  )
+}
+
+// ── INVENTAIRE ROW — avec détail théorique + saisie formats ───────────────
+function InventaireRow({ item, physique, ecart, isLast, onChange }) {
+  const [showDetail, setShowDetail] = useState(false)
+  const [formats, setFormats]       = useState(null) // null = pas chargé
+  const [formatQty, setFormatQty]   = useState({})   // { formatId: nb }
+
+  async function loadFormats() {
+    if (formats !== null) return
+    const norm = s => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim()||''
+    const { data } = await supabase.from('matiere_formats').select('*')
+      .eq('actif', true).order('poids')
+    const matched = (data||[]).filter(f => norm(f.matiere) === norm(item.matiere_ref || item.name))
+    setFormats(matched)
+  }
+
+  function handleFormatChange(fmt, nb) {
+    const newFQ = { ...formatQty, [fmt.id]: nb }
+    setFormatQty(newFQ)
+    // Total = somme de tous les formats sélectionnés
+    const total = Object.entries(newFQ).reduce((sum, [fid, n]) => {
+      const f = formats?.find(f => f.id === parseInt(fid))
+      return sum + (f ? parseFloat(n||0) * parseFloat(f.poids||0) : 0)
+    }, 0)
+    onChange(total > 0 ? String(parseFloat(total.toFixed(2))) : '')
+  }
+
+  const borderColor = ecart === null ? 'var(--outside-cream2)'
+    : ecart < -1 ? 'var(--danger)'
+    : ecart > 1  ? 'var(--outside-amber)'
+    : 'var(--outside-green)'
+
+  return (
+    <div style={{ borderBottom: isLast ? 'none' : '1.5px solid var(--outside-cream)' }}>
+      {/* LIGNE PRINCIPALE */}
+      <div style={{ padding: '0.6rem 1rem', display: 'flex', gap: 8, alignItems: 'center' }}>
+        {/* NOM + DÉTAIL */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.82rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item.name}</div>
+          <div style={{ display: 'flex', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.62rem', color: 'var(--muted)' }}>Début: <strong>{item.stockDebut}</strong></span>
+            {item.receptions > 0 && <span style={{ fontSize: '0.62rem', color: 'var(--outside-green)' }}>+{item.receptions} reçu</span>}
+            {item.hasCompo && <span style={{ fontSize: '0.62rem', color: 'var(--outside-orange)' }}>−{item.consoTheo} conso</span>}
+            {item.pertesDec > 0 && <span style={{ fontSize: '0.62rem', color: 'var(--danger)' }}>−{item.pertesDec} pertes</span>}
+          </div>
+        </div>
+
+        {/* STOCK THÉORIQUE */}
+        <div style={{ textAlign: 'center', flexShrink: 0, width: 60 }}>
+          <div style={{ fontSize: '0.6rem', color: 'var(--muted)', fontWeight: 700 }}>Théo.</div>
+          <div style={{ fontWeight: 800, fontSize: '0.82rem', color: item.hasCompo ? 'var(--outside-dark)' : 'var(--muted)' }}>
+            {item.stockTheo}
+          </div>
+          {!item.hasCompo && <div style={{ fontSize: '0.55rem', color: 'var(--muted)' }}>estimé</div>}
+        </div>
+
+        {/* SAISIE PHYSIQUE */}
+        <div style={{ flexShrink: 0, width: 72 }}>
+          <div style={{ fontSize: '0.6rem', color: 'var(--muted)', fontWeight: 700, textAlign: 'center', marginBottom: 2 }}>Physique</div>
+          <input type="number" min="0" step="0.1" value={physique}
+            onChange={e => onChange(e.target.value)}
+            onFocus={() => { loadFormats() }}
+            placeholder={String(item.stockTheo)}
+            style={{ textAlign:'center', fontWeight:800, fontSize:'0.82rem', border:`1.5px solid ${borderColor}`, borderRadius:'var(--radius-sm)', padding:'4px 2px', fontFamily:'var(--font-body)', outline:'none', width:'100%' }}/>
+        </div>
+
+        {/* ÉCART */}
+        <div style={{ textAlign: 'center', flexShrink: 0, width: 52 }}>
+          <div style={{ fontSize: '0.6rem', color: 'var(--muted)', fontWeight: 700 }}>Écart</div>
+          <div style={{ fontWeight: 800, fontSize: '0.82rem',
+            color: ecart===null?'var(--muted)':ecart<-1?'var(--danger)':ecart>1?'var(--outside-amber)':'var(--outside-green)' }}>
+            {ecart===null ? '—' : (ecart>0?'+':'')+ecart.toFixed(0)}
+          </div>
+        </div>
+      </div>
+
+      {/* FORMATS (si disponibles) */}
+      {formats && formats.length > 0 && (
+        <div style={{ padding: '0 1rem 0.5rem', background: 'var(--outside-cream)', borderTop: '1px solid var(--outside-cream2)' }}>
+          <div style={{ fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', padding: '4px 0 4px' }}>Saisie par format</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {formats.map(fmt => {
+              const nb = formatQty[fmt.id] || ''
+              return (
+                <div key={fmt.id} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'white', borderRadius: 'var(--radius-sm)', padding: '4px 8px', border: '1px solid var(--outside-cream2)' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--outside-dark)' }}>{fmt.label}</span>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>{fmt.poids}{item.unit}</span>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--muted)' }}>×</span>
+                  <input type="number" min="0" step="1" value={nb}
+                    onChange={e => handleFormatChange(fmt, e.target.value)}
+                    style={{ width: 36, textAlign: 'center', fontWeight: 800, fontSize: '0.82rem', border: '1.5px solid var(--outside-orange)', borderRadius: 4, padding: '2px', fontFamily: 'var(--font-body)', outline: 'none' }}/>
+                </div>
+              )
+            })}
+          </div>
+          {physique !== '' && <div style={{ fontSize: '0.7rem', color: 'var(--outside-green)', fontWeight: 700, marginTop: 4 }}>Total: {physique} {item.unit}</div>}
+        </div>
+      )}
+    </div>
   )
 }
