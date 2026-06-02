@@ -373,18 +373,24 @@ function TabInventaire({ isManager, profile }) {
                             border:`2px solid ${ecart!==null?(Math.abs(ecart)<1?'var(--outside-green)':ecart<0?'var(--danger)':'var(--outside-amber)'):'var(--outside-cream2)'}`,
                             borderRadius:'var(--radius-md)',padding:'5px 4px',fontFamily:'var(--font-body)',outline:'none',background:'white'}}/>
                       ) : (
-                        <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                        <div style={{display:'flex',flexDirection:'column',gap:3}}>
                           {fmts.map(fmt=>(
-                            <div key={fmt.id} style={{display:'flex',alignItems:'center',gap:4}}>
-                              <input type="number" min="0" step="1" value={fmtQtys[fmt.id]||''}
-                                onChange={e=>setFormatQty(item.name, fmt.id, e.target.value, fmt.poids)}
-                                style={{width:38,textAlign:'center',fontWeight:800,fontSize:'0.82rem',
-                                  border:'2px solid var(--outside-orange)',borderRadius:'var(--radius-md)',padding:'4px 2px',
-                                  fontFamily:'var(--font-body)',outline:'none'}}/>
-                              <span style={{fontSize:'0.62rem',color:'var(--muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',maxWidth:60}}>{fmt.label}</span>
+                            <div key={fmt.id} style={{display:'flex',alignItems:'center',gap:6}}>
+                              <span style={{fontSize:'0.65rem',color:'var(--muted)',whiteSpace:'nowrap',minWidth:60}}>{fmt.label}</span>
+                              <div style={{display:'flex',alignItems:'center',gap:3}}>
+                                <button onClick={()=>setFormatQty(item.name,fmt.id,Math.max(0,(parseInt(fmtQtys[fmt.id]||0)-1)).toString(),fmt.poids)}
+                                  style={{width:24,height:24,borderRadius:'50%',border:'1.5px solid var(--outside-cream2)',background:'white',fontWeight:800,cursor:'pointer',fontSize:'0.9rem',lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center'}}>−</button>
+                                <input type="number" min="0" step="1" value={fmtQtys[fmt.id]||''}
+                                  onChange={e=>setFormatQty(item.name, fmt.id, e.target.value, fmt.poids)}
+                                  style={{width:40,textAlign:'center',fontWeight:800,fontSize:'0.9rem',
+                                    border:'2px solid var(--outside-orange)',borderRadius:'var(--radius-sm)',padding:'3px',
+                                    fontFamily:'var(--font-body)',outline:'none'}}/>
+                                <button onClick={()=>setFormatQty(item.name,fmt.id,(parseInt(fmtQtys[fmt.id]||0)+1).toString(),fmt.poids)}
+                                  style={{width:24,height:24,borderRadius:'50%',border:'1.5px solid var(--outside-cream2)',background:'white',fontWeight:800,cursor:'pointer',fontSize:'0.9rem',lineHeight:1,display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+                              </div>
                             </div>
                           ))}
-                          {qtePhysique && <div style={{fontSize:'0.62rem',fontWeight:800,color:'var(--outside-green)'}}>= {qtePhysique} {item.unit}</div>}
+                          {qtePhysique && <div style={{fontSize:'0.68rem',fontWeight:800,color:'var(--outside-green)'}}>= {qtePhysique} {item.unit}</div>}
                         </div>
                       )}
                     </div>
