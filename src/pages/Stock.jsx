@@ -174,9 +174,16 @@ function TabMouvements({ isManager, profile }) {
     setFormats(prev=>({...prev,[item.id]:matched}))
   }
 
-  async function saveReception({item,qty,prix,fournisseur,note}) {
+  async function saveReception({item,qty,prix,fournisseur,note,factureFile}) {
     setSaving(true)
-    await supabase.from('stock_movements').insert({item_id:item.id,qty:parseFloat(qty),type:'reception',note,fournisseur,created_by:profile?.id})
+    let facture_url = null
+    if (factureFile) {
+      const ext  = factureFile.name.split('.').pop()
+      const path = `receptions/${item.id}_${Date.now()}.${ext}`
+      const { data } = await supabase.storage.from('factures').upload(path, factureFile)
+      if (data) facture_url = data.path
+    }
+    await supabase.from('stock_movements').insert({item_id:item.id,qty:parseFloat(qty),type:'reception',note,fournisseur,facture_url,created_by:profile?.id})
     await supabase.from('stock_items').update({current_qty:parseFloat(item.current_qty||0)+parseFloat(qty),updated_at:new Date().toISOString()}).eq('id',item.id)
     await loadData(); setSaving(false); setModal(null)
   }
@@ -494,7 +501,7 @@ function TabInventaire({ isManager, profile }) {
 
 // ── MODAL RÉCEPTION ───────────────────────────────────────────────────────
 function ReceptionModal({items,formats,fetchFormats,onClose,onSave,saving}) {
-  const [form,setForm]=useState({item:null,qty:'',prix:'',fournisseur:'',note:''})
+  const [form,setForm]=useState({item:null,qty:'',prix:'',fournisseur:'',note:'',factureFile:null})
   const [selFmt,setSelFmt]=useState(null)
   const [fmtQty,setFmtQty]=useState('1')
   const set=(k,v)=>setForm(p=>({...p,[k]:v}))
@@ -550,6 +557,10 @@ function ReceptionModal({items,formats,fetchFormats,onClose,onSave,saving}) {
       </div>
       <div className="form-group"><label className="form-label">Fournisseur</label><input className="form-input" value={form.fournisseur} onChange={e=>set('fournisseur',e.target.value)}/></div>
       <div className="form-group"><label className="form-label">Note</label><input className="form-input" value={form.note} onChange={e=>set('note',e.target.value)}/></div>
+      <div className="form-group"><label className="form-label">Facture <span style={{fontWeight:400,opacity:0.6}}>optionnel</span></label>
+        <input type="file" className="form-input" accept="image/*,.pdf" onChange={e=>set('factureFile',e.target.files[0]||null)}/>
+        {form.factureFile && <div style={{fontSize:'0.72rem',color:'var(--outside-green)',marginTop:4}}>✓ {form.factureFile.name}</div>}
+      </div>
     </Modal>
   )
 }
