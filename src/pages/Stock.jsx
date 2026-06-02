@@ -144,20 +144,21 @@ function TabInventaire({ isManager, profile }) {
 
   useEffect(()=>{ loadData() },[periode])
 
+  const [calcLoading, setCalcLoading] = useState(false)
+
   async function loadData() {
     setLoading(true)
 
-    // Inventaire précédent pour stock début de période
     const prevPeriode = typeInv === 'hebdo'
       ? periodeHebdo(subWeeks(periodeDate, 1))
       : periodeMensuel(new Date(periodeDate.getFullYear(), periodeDate.getMonth()-1))
 
+    // Phase 1 — données rapides (sans ventes)
     const [
       { data: si },
       { data: existing },
       { data: prevInv },
       { data: mpData },
-      { data: compoData },
       { data: mvt },
       { data: pertes },
     ] = await Promise.all([
@@ -165,107 +166,65 @@ function TabInventaire({ isManager, profile }) {
       supabase.from('stock_inventaires').select('*').eq('periode',periode).eq('periode_type',typeInv),
       supabase.from('stock_inventaires').select('item_name,qte_physique').eq('periode',prevPeriode).eq('periode_type',typeInv),
       supabase.from('matiere_premiere').select('matiere,prix,quantite,unite').or('actif.eq.true,actif.is.null'),
-      supabase.from('composition_produit').select('nom_produit,matiere,quantite_m,prix_achat,type'),
       supabase.from('stock_movements').select('item_id,qty,type').eq('type','reception').gte('created_at',dateFrom),
       supabase.from('stock_pertes').select('item_name,qte').gte('date_perte',dateFrom),
     ])
 
-    // Maps utiles
     const prevInvMap = {}
     for (const i of (prevInv||[])) prevInvMap[i.item_name] = parseFloat(i.qte_physique||0)
-
     const mpMap = {}
-    for (const m of (mpData||[])) mpMap[m.matiere] = { prixUnit: m.quantite>0?m.prix/m.quantite:0, unite: m.unite }
-
+    for (const m of (mpData||[])) mpMap[m.matiere] = { prixUnit: m.quantite>0?m.prix/m.quantite:0 }
     const receptionsMap = {}
     for (const m of (mvt||[])) receptionsMap[m.item_id] = (receptionsMap[m.item_id]||0) + parseFloat(m.qty||0)
-
     const pertesMap = {}
     for (const p of (pertes||[])) pertesMap[p.item_name] = (pertesMap[p.item_name]||0) + parseFloat(p.qte||0)
 
-    // Calcul conso théorique depuis ventes × compositions
-    const norm = s => s?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()||''
+    // Affichage rapide avec stock théo = stock actuel (sans conso)
+    const baseItems = (si||[]).map(item => ({
+      ...item,
+      stockDebut:  prevInvMap[item.name] ?? parseFloat(item.current_qty||0),
+      receptions:  receptionsMap[item.id]||0,
+      pertesDec:   pertesMap[item.name]||0,
+      consoTheo:   0,
+      hasCompo:    false,
+      stockTheo:   parseFloat(((prevInvMap[item.name] ?? parseFloat(item.current_qty||0)) + (receptionsMap[item.id]||0) - (pertesMap[item.name]||0)).toFixed(2)),
+      prixUnit:    mpMap[item.matiere_ref]?.prixUnit || 0,
+    }))
 
-    // Récupérer les ventes de la période
-    let ventes = [], pageV = 0
-    while (true) {
-      const { data: batch } = await supabase
-        .from('transaction_line').select('produit,qte')
-        .gte('date_vente', dateFrom).lte('date_vente', dateTo)
-        .range(pageV*1000, (pageV+1)*1000-1)
-      if (!batch||batch.length===0) break
-      ventes = ventes.concat(batch)
-      if (batch.length<1000) break
-      pageV++
-    }
-
-    // Agréger ventes par produit
-    const venteMap = {}
-    for (const v of ventes) {
-      const key = norm(v.produit)
-      venteMap[key] = (venteMap[key]||0) + parseFloat(v.qte||0)
-    }
-
-    // Construire baseMap et produitMap depuis compositions
-    const baseMap = {}, produitMap = {}
-    for (const c of (compoData||[])) {
-      const key = norm(c.nom_produit)
-      if (c.type==='base') { if(!baseMap[key])baseMap[key]=[]; baseMap[key].push(c) }
-      else { if(!produitMap[key])produitMap[key]=[]; produitMap[key].push(c) }
-    }
-
-    // Calculer conso théorique par matière (en grammes/ml/unité)
-    const consoTheoMap = {} // { matiere_name: qte_consommée }
-    for (const [prodNorm, qteVendue] of Object.entries(venteMap)) {
-      const ingredients = produitMap[prodNorm]||[]
-      for (const c of ingredients) {
-        const matiereNorm = norm(c.matiere)
-        const baseKey = Object.keys(baseMap).find(k=>k===matiereNorm)
-        if (baseKey) {
-          const baseIngredients = baseMap[baseKey]
-          const baseTotal = baseIngredients.reduce((s,bi)=>s+parseFloat(bi.quantite_m||0),0)
-          const ratio = baseTotal>0 ? parseFloat(c.quantite_m)/baseTotal : 0
-          for (const bi of baseIngredients) {
-            const mRef = Object.keys(mpMap).find(k=>norm(k)===norm(bi.matiere))||bi.matiere
-            consoTheoMap[mRef] = (consoTheoMap[mRef]||0) + qteVendue * ratio * parseFloat(bi.quantite_m||0)
-          }
-        } else {
-          const mRef = Object.keys(mpMap).find(k=>norm(k)===norm(c.matiere))||c.matiere
-          consoTheoMap[mRef] = (consoTheoMap[mRef]||0) + qteVendue * parseFloat(c.quantite_m||0)
-        }
-      }
-    }
-
-    // Calculer stock théorique par item
-    const enriched = (si||[]).map(item => {
-      const prevStock   = prevInvMap[item.name] ?? parseFloat(item.current_qty||0)
-      const receptions  = receptionsMap[item.id]||0
-      const pertesDec   = pertesMap[item.name]||0
-      // Conso théorique depuis ventes (si matiere_ref défini)
-      const mRef        = item.matiere_ref
-      const consoTheo   = mRef ? (consoTheoMap[mRef]||0) : 0
-      const hasCompo    = mRef && consoTheoMap[mRef] !== undefined
-      const stockTheo   = Math.max(0, prevStock + receptions - consoTheo - pertesDec)
-
-      return {
-        ...item,
-        stockDebut:   prevStock,
-        receptions,
-        consoTheo:    parseFloat(consoTheo.toFixed(2)),
-        pertesDec,
-        stockTheo:    parseFloat(stockTheo.toFixed(2)),
-        hasCompo,
-        prixUnit:     mpMap[mRef]?.prixUnit || 0,
-      }
-    })
-
-    // Inventaire existant
     const invMap = {}
     for (const i of (existing||[])) invMap[i.item_name] = i.qte_physique
 
-    setItems(enriched)
+    setItems(baseItems)
     setInv(invMap)
     setLoading(false)
+
+    // Phase 2 — calcul conso théorique en arrière-plan
+    setCalcLoading(true)
+    calcConsoTheo(baseItems, mpMap)
+  }
+
+  async function calcConsoTheo(baseItems, mpMap) {
+    // Utilise la vue SQL v_conso_theorique — 1 seule requête rapide
+    const { data: consoData } = await supabase
+      .from('v_conso_theorique')
+      .select('matiere, qte_conso')
+      .gte('date_vente', dateFrom)
+      .lte('date_vente', dateTo)
+
+    // Agréger par matière
+    const consoTheoMap = {}
+    for (const row of (consoData||[])) {
+      consoTheoMap[row.matiere] = (consoTheoMap[row.matiere]||0) + parseFloat(row.qte_conso||0)
+    }
+
+    setItems(prev => prev.map(item => {
+      const mRef = item.matiere_ref
+      const conso = mRef ? (consoTheoMap[mRef]||0) : 0
+      const hasCompo = mRef && consoTheoMap[mRef] !== undefined
+      const stockTheo = Math.max(0, item.stockDebut + item.receptions - conso - item.pertesDec)
+      return { ...item, consoTheo: parseFloat(conso.toFixed(2)), hasCompo, stockTheo: parseFloat(stockTheo.toFixed(2)) }
+    }))
+    setCalcLoading(false)
   }
 
   async function saveInventaire() {
@@ -323,6 +282,11 @@ function TabInventaire({ isManager, profile }) {
         </div>
       </div>
 
+      {calcLoading && (
+        <div style={{display:'flex',alignItems:'center',gap:6,padding:'6px 12px',background:'var(--outside-cream)',borderRadius:'var(--radius-md)',marginBottom:8,fontSize:'0.75rem',color:'var(--muted)',fontWeight:600}}>
+          <Spinner size={12}/> Calcul de la consommation théorique...
+        </div>
+      )}
       {loading ? <div style={{display:'flex',justifyContent:'center',padding:'2rem'}}><Spinner size={24}/></div> : (
         <>
           {categories.map(cat=>(
