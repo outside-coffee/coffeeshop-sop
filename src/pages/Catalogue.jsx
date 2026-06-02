@@ -169,10 +169,10 @@ function MatieresTab() {
                       <div key={fmt.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', background: 'white', borderRadius: 'var(--radius-sm)', marginBottom: 4 }}>
                         <div style={{ flex: 1 }}>
                           <span style={{ fontWeight: 700, fontSize: '0.82rem' }}>{fmt.label}</span>
-                          <span style={{ color: 'var(--muted)', fontSize: '0.75rem', marginLeft: 8 }}>{fmt.poids} {matiere?.unite || ""}</span>
+                          <span style={{ color: 'var(--muted)', fontSize: '0.75rem', marginLeft: 8 }}>{fmt.poids} {item.unite || ''}</span>
                         </div>
                         <span style={{ fontWeight: 800, fontSize: '0.82rem', color: 'var(--outside-dark)' }}>{parseFloat(fmt.prix).toFixed(2)} DT</span>
-                        <span style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>{fmt.poids > 0 ? (parseFloat(fmt.prix) / parseFloat(fmt.poids)).toFixed(4) : '—'} DT/{matiere?.unite || ""}</span>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--muted)' }}>{fmt.poids > 0 ? (parseFloat(fmt.prix) / parseFloat(fmt.poids)).toFixed(4) : '—'} DT/{item.unite || ''}</span>
                         {isManager && (
                           <div style={{ display: 'flex', gap: 2 }}>
                             <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--muted)', padding: 2 }} onClick={() => setFmtModal({ matiere: item.matiere, format: fmt })}><Edit2 size={11} /></button>
