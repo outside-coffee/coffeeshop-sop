@@ -567,65 +567,89 @@ function TabInventaire({ isManager, profile }) {
 
 // ── MODAL RÉCEPTION ───────────────────────────────────────────────────────
 function ReceptionModal({items,formats,fetchFormats,onClose,onSave,saving}) {
-  const [form,setForm]=useState({item:null,qty:'',prix:'',fournisseur:'',note:'',factureFile:null,date_reception:format(new Date(),'yyyy-MM-dd')})
-  const [selFmt,setSelFmt]=useState(null)
-  const [fmtQty,setFmtQty]=useState('1')
+  const [form,setForm]    = useState({item:null,qty:'',prix:'',fournisseur:'',note:'',factureFile:null,date_reception:format(new Date(),'yyyy-MM-dd')})
+  const [fmtQtys,setFmtQtys] = useState({}) // { fmtId: nb }
   const set=(k,v)=>setForm(p=>({...p,[k]:v}))
 
-  useEffect(()=>{ if(form.item) fetchFormats(form.item) },[form.item])
-  const fmts=form.item?(formats[form.item.id]||[]):[]
+  useEffect(()=>{ if(form.item){fetchFormats(form.item);setFmtQtys({})} },[form.item])
+  const fmts = form.item?(formats[form.item.id]||[]):[]
 
-  function pickFmt(f) {
-    const n=parseInt(fmtQty)||1; setSelFmt(f)
-    set('qty',String(n*f.poids)); set('prix',String((n*parseFloat(f.prix)).toFixed(2)))
-  }
-  function updateFQ(n) {
-    setFmtQty(String(n))
-    if(selFmt){ set('qty',String(n*selFmt.poids)); set('prix',String((n*parseFloat(selFmt.prix)).toFixed(2))) }
+  function setFmtQty(fmtId, nb, fmtPoids, fmtPrix) {
+    const newFmts = {...fmtQtys, [fmtId]: nb}
+    setFmtQtys(newFmts)
+    // Recalculer qty et prix depuis tous les formats
+    const totalQty  = Object.entries(newFmts).reduce((s,[fid,n])=>{
+      const f=fmts.find(x=>x.id===parseInt(fid)); return s+(f?parseFloat(n||0)*parseFloat(f.poids||0):0)
+    },0)
+    const totalPrix = Object.entries(newFmts).reduce((s,[fid,n])=>{
+      const f=fmts.find(x=>x.id===parseInt(fid)); return s+(f?parseFloat(n||0)*parseFloat(f.prix||0):0)
+    },0)
+    set('qty',  totalQty>0  ? String(parseFloat(totalQty.toFixed(2)))  : '')
+    set('prix', totalPrix>0 ? String(parseFloat(totalPrix.toFixed(2))) : '')
   }
 
   return (
     <Modal open onClose={onClose} title="Nouvelle réception"
       footer={<><button className="btn btn-outline" onClick={onClose}>Annuler</button><button className="btn btn-primary" disabled={!form.item||!form.qty||saving} onClick={()=>onSave(form)}>{saving?<Spinner size={16}/>:<Save size={15}/>} Enregistrer</button></>}>
+
       <div className="form-group"><label className="form-label">Article</label>
-        <select className="form-select" value={form.item?.id||''} onChange={e=>{const val=e.target.value;const it=items.find(i=>String(i.id)===String(val));set('item',it||null);setSelFmt(null);setFmtQty('1')}}>
+        <select className="form-select" value={form.item?.id||''} onChange={e=>{const val=e.target.value;const it=items.find(i=>String(i.id)===String(val));set('item',it||null)}}>
           <option value="">— Choisir —</option>
           {items.map(i=><option key={i.id} value={i.id}>{i.name}</option>)}
         </select>
       </div>
+
+      {/* FORMATS */}
       {fmts.length>0 && (
-        <div className="form-group"><label className="form-label">Format</label>
-          <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:8}}>
-            {fmts.map(f=>(
-              <button key={f.id} onClick={()=>pickFmt(f)}
-                style={{padding:'6px 10px',borderRadius:'var(--radius-md)',border:`2px solid ${selFmt?.id===f.id?'var(--outside-orange)':'var(--outside-cream2)'}`,background:selFmt?.id===f.id?'#FFF8F5':'white',cursor:'pointer'}}>
-                <div style={{fontWeight:800,fontSize:'0.78rem'}}>{f.label}</div>
-                <div style={{fontSize:'0.65rem',color:'var(--muted)'}}>{f.poids} {form.item?.unit} · {parseFloat(f.prix).toFixed(2)} DT</div>
-              </button>
-            ))}
-          </div>
-          {selFmt && (
-            <div style={{display:'flex',alignItems:'center',gap:10,background:'var(--outside-cream)',borderRadius:'var(--radius-md)',padding:'8px 12px'}}>
-              <button onClick={()=>updateFQ(Math.max(1,parseInt(fmtQty||1)-1))} style={{width:32,height:32,borderRadius:'50%',border:'none',background:'white',fontWeight:800,fontSize:'1.2rem',cursor:'pointer'}}>−</button>
-              <input type="number" min="1" value={fmtQty} onChange={e=>updateFQ(Math.max(1,parseInt(e.target.value)||1))}
-                style={{width:50,textAlign:'center',fontWeight:800,fontSize:'1rem',border:'2px solid var(--outside-orange)',borderRadius:'var(--radius-sm)',padding:'3px',fontFamily:'var(--font-body)',outline:'none'}}/>
-              <button onClick={()=>updateFQ(parseInt(fmtQty||1)+1)} style={{width:32,height:32,borderRadius:'50%',border:'none',background:'white',fontWeight:800,fontSize:'1.2rem',cursor:'pointer'}}>+</button>
-              <div style={{fontSize:'0.82rem'}}>= <strong style={{color:'var(--outside-green)'}}>{parseInt(fmtQty||1)*selFmt.poids} {form.item?.unit}</strong>
-                <div style={{fontSize:'0.7rem',color:'var(--muted)'}}>{(parseInt(fmtQty||1)*parseFloat(selFmt.prix)).toFixed(2)} DT</div>
+        <div className="form-group">
+          <label className="form-label">Quantité reçue par format</label>
+          {fmts.map(fmt=>(
+            <div key={fmt.id} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+              <span style={{flex:1,fontSize:'0.82rem',fontWeight:600}}>{fmt.label} <span style={{color:'var(--muted)',fontSize:'0.7rem'}}>{fmt.poids} {form.item?.unit} · {parseFloat(fmt.prix).toFixed(2)} DT</span></span>
+              <div style={{display:'flex',alignItems:'center',gap:0,background:'var(--outside-cream)',borderRadius:'var(--radius-md)',overflow:'hidden',border:'1.5px solid var(--outside-cream2)'}}>
+                <button onClick={()=>setFmtQty(fmt.id,String(Math.max(0,(parseInt(fmtQtys[fmt.id]||0)-1))),fmt.poids,fmt.prix)}
+                  style={{width:38,height:38,border:'none',background:'transparent',fontWeight:800,cursor:'pointer',fontSize:'1.1rem'}}>−</button>
+                <input type="number" min="0" step="1" inputMode="numeric" value={fmtQtys[fmt.id]??''}
+                  onChange={e=>setFmtQty(fmt.id,e.target.value,fmt.poids,fmt.prix)}
+                  style={{width:44,textAlign:'center',fontWeight:800,fontSize:'0.95rem',border:'none',borderLeft:'1.5px solid var(--outside-cream2)',borderRight:'1.5px solid var(--outside-cream2)',padding:'4px 2px',fontFamily:'var(--font-body)',outline:'none',background:'white',height:38}}/>
+                <button onClick={()=>setFmtQty(fmt.id,String((parseInt(fmtQtys[fmt.id]||0)+1)),fmt.poids,fmt.prix)}
+                  style={{width:38,height:38,border:'none',background:'transparent',fontWeight:800,cursor:'pointer',fontSize:'1.1rem'}}>+</button>
               </div>
             </div>
-          )}
+          ))}
+          {form.qty && <div style={{fontSize:'0.78rem',fontWeight:800,color:'var(--outside-green)',marginTop:4}}>= {form.qty} {form.item?.unit} · {form.prix} DT</div>}
         </div>
       )}
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem'}}>
-        <div className="form-group"><label className="form-label">Quantité ({form.item?.unit||''})</label><input className="form-input" type="number" value={form.qty} onChange={e=>set('qty',e.target.value)}/></div>
-        <div className="form-group"><label className="form-label">Prix (DT)</label><input className="form-input" type="number" step="0.01" value={form.prix} onChange={e=>set('prix',e.target.value)}/></div>
-      </div>
+
+      {/* QUANTITÉ MANUELLE (si pas de format) */}
+      {fmts.length===0 && (
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem'}}>
+          <div className="form-group"><label className="form-label">Quantité ({form.item?.unit||''})</label>
+            <input className="form-input" type="number" inputMode="decimal" value={form.qty} onChange={e=>set('qty',e.target.value)}/></div>
+          <div className="form-group"><label className="form-label">Prix (DT)</label>
+            <input className="form-input" type="number" step="0.01" value={form.prix} onChange={e=>set('prix',e.target.value)}/></div>
+        </div>
+      )}
+
+      {/* Si formats mais saisie manuelle aussi possible */}
+      {fmts.length>0 && (
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem'}}>
+          <div className="form-group"><label className="form-label">Qté totale ({form.item?.unit||''})</label>
+            <input className="form-input" type="number" inputMode="decimal" value={form.qty} onChange={e=>set('qty',e.target.value)}/></div>
+          <div className="form-group"><label className="form-label">Prix total (DT)</label>
+            <input className="form-input" type="number" step="0.01" value={form.prix} onChange={e=>set('prix',e.target.value)}/></div>
+        </div>
+      )}
+
       <div className="form-group"><label className="form-label">Date de réception</label>
         <input className="form-input" type="date" value={form.date_reception} onChange={e=>set('date_reception',e.target.value)}/>
       </div>
-      <div className="form-group"><label className="form-label">Fournisseur</label><input className="form-input" value={form.fournisseur} onChange={e=>set('fournisseur',e.target.value)}/></div>
-      <div className="form-group"><label className="form-label">Note</label><input className="form-input" value={form.note} onChange={e=>set('note',e.target.value)}/></div>
+      <div className="form-group"><label className="form-label">Fournisseur</label>
+        <input className="form-input" value={form.fournisseur} onChange={e=>set('fournisseur',e.target.value)}/>
+      </div>
+      <div className="form-group"><label className="form-label">Note</label>
+        <input className="form-input" value={form.note} onChange={e=>set('note',e.target.value)}/>
+      </div>
       <div className="form-group"><label className="form-label">Facture <span style={{fontWeight:400,opacity:0.6}}>optionnel</span></label>
         <input type="file" className="form-input" accept="image/*,.pdf" onChange={e=>set('factureFile',e.target.files[0]||null)}/>
         {form.factureFile && <div style={{fontSize:'0.72rem',color:'var(--outside-green)',marginTop:4}}>✓ {form.factureFile.name}</div>}
