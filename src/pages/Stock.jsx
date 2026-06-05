@@ -224,14 +224,16 @@ function TabMouvements({ isManager, profile }) {
       const { data } = await supabase.storage.from('factures').upload(path, factureFile)
       if (data) facture_url = data.path
     }
-    await supabase.from('stock_movements').insert({item_id:item.id,qty:parseFloat(qty),type:'reception',note,fournisseur,facture_url,created_by:profile?.id,created_at:form.date_reception+'T12:00:00'})
-    await supabase.from('stock_items').update({current_qty:parseFloat(item.current_qty||0)+parseFloat(qty),updated_at:new Date().toISOString()}).eq('id',item.id)
+    const { error: mvtError } = await supabase.from('stock_movements').insert({item_id:item.id,qty:parseFloat(qty),type:'reception',note:note||null,fournisseur:fournisseur||null,facture_url,done_by:profile?.id,created_at:form.date_reception+'T12:00:00'})
+    if (mvtError) { alert('Erreur mouvement: '+mvtError.message); setSaving(false); return }
+    const { error: siError } = await supabase.from('stock_items').update({current_qty:parseFloat(item.current_qty||0)+parseFloat(qty),updated_at:new Date().toISOString()}).eq('id',item.id)
+    if (siError) { alert('Erreur stock: '+siError.message); setSaving(false); return }
     await loadData(); setSaving(false); setModal(null)
   }
 
   async function savePerte({item,qte,motif,motif_detail,date_perte}) {
     setSaving(true)
-    await supabase.from('stock_pertes').insert({item_name:item.name,matiere_ref:item.matiere_ref,qte:parseFloat(qte),unite:item.unit,motif,motif_detail:motif_detail||null,date_perte:date_perte||format(new Date(),'yyyy-MM-dd'),created_by:profile?.id})
+    await supabase.from('stock_pertes').insert({item_name:item.name,matiere_ref:item.matiere_ref,qte:parseFloat(qte),unite:item.unit,motif,motif_detail:motif_detail||null,date_perte:date_perte||format(new Date(),'yyyy-MM-dd')})
     await supabase.from('stock_items').update({current_qty:Math.max(0,parseFloat(item.current_qty||0)-parseFloat(qte)),updated_at:new Date().toISOString()}).eq('id',item.id)
     await loadData(); setSaving(false); setModal(null)
   }
