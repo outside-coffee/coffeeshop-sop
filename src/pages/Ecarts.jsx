@@ -108,22 +108,14 @@ export default function Ecarts() {
       const stockFin=invFinMap[k]??null
       const recu=recuMap[k]||0
       const perdus=pertesMap[k]||0
-      // Conso réelle :
-      // - Si inventaire physique → stock_début + réceptions − stock_fin − pertes
-      // - Sans inventaire → stock_début + réceptions − current_qty − pertes (estimé)
+      // Conso réelle uniquement si inventaire physique saisi
       let consoReelle = null
       let isEstime    = false
-      const siItem    = (stockItems||[]).find(s => norm(s.matiere_ref||s.name) === k)
-      const currentQty = siItem ? parseFloat(siItem.current_qty||0) : null
 
       if (stockFin !== null) {
         const debut = stockDebut !== null ? stockDebut : 0
         const val   = debut + recu - stockFin - perdus
         if (val >= 0) consoReelle = val
-      } else if (currentQty !== null) {
-        const debut = stockDebut !== null ? stockDebut : currentQty
-        const val   = debut + recu - currentQty - perdus
-        if (val >= 0) { consoReelle = val; isEstime = true }
       }
       const ecart=consoReelle!==null?consoTheo-consoReelle:null
       const ecartPct=consoTheo>0&&consoReelle!==null?pct(consoTheo,consoReelle):null
