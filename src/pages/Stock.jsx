@@ -298,7 +298,7 @@ function TabInventaire({ isManager, profile }) {
   const [items, setItems]           = useState([])
   const [inv, setInv]               = useState({})
   const [stockCalc, setStockCalc]   = useState({})
-  const [typeInv, setTypeInv]       = useState('hebdo')
+  const typeInv = 'hebdo'
   const [periodeDate, setPeriodeDate] = useState(new Date())
   const [loading, setLoading]       = useState(true)
   const [calcLoading, setCalcLoading] = useState(false)
@@ -435,12 +435,8 @@ function TabInventaire({ isManager, profile }) {
     <>
       {/* NAV */}
       <div style={{display:'flex',gap:6,marginBottom:'1rem',flexWrap:'wrap',alignItems:'center'}}>
-        <div style={{display:'flex',gap:4}}>
-          {['hebdo','mensuel'].map(t=>(
-            <button key={t} className={`btn btn-sm ${typeInv===t?'btn-primary':'btn-outline'}`} onClick={()=>setTypeInv(t)}>
-              {t==='hebdo'?'Hebdo':'Mensuel'}
-            </button>
-          ))}
+        <div style={{display:'flex',gap:4,alignItems:'center'}}>
+          <div style={{fontSize:'0.75rem',fontWeight:700,color:'var(--outside-dark)'}}>Inventaire hebdomadaire</div>
         </div>
         <div style={{display:'flex',gap:4,alignItems:'center'}}>
           <button className="btn btn-ghost btn-sm" onClick={()=>setPeriodeDate(d=>typeInv==='hebdo'?subWeeks(d,1):new Date(d.getFullYear(),d.getMonth()-1))}>←</button>
