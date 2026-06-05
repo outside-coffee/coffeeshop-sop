@@ -66,7 +66,20 @@ function MatieresTab() {
       setItems(prev => prev.map(i => i.id === form.id ? { ...i, ...form } : i))
     } else {
       const { data } = await supabase.from('matiere_premiere').insert(form).select().single()
-      if (data) setItems(prev => [...prev, data].sort((a,b) => a.matiere.localeCompare(b.matiere)))
+      if (data) {
+        setItems(prev => [...prev, data].sort((a,b) => a.matiere.localeCompare(b.matiere)))
+        // Créer automatiquement l'entrée dans stock_items
+        await supabase.from('stock_items').insert({
+          name:        data.matiere,
+          unit:        data.unite || 'g',
+          category:    data.categorie || 'DIVERS',
+          matiere_ref: data.matiere,
+          current_qty: 0,
+          min_qty:     0,
+          ideal_qty:   0,
+          active:      true,
+        })
+      }
     }
     setSaving(false); setModal(false); setEdit(null)
   }
@@ -99,6 +112,18 @@ function MatieresTab() {
     await supabase.from('stock_items')
       .update({ active: newVal })
       .eq('matiere_ref', item.matiere)
+    // Si on réactive et que l'entrée n'existe pas → la créer
+    if (newVal) {
+      const { data: existing } = await supabase.from('stock_items').select('id').eq('matiere_ref', item.matiere).single()
+      if (!existing) {
+        await supabase.from('stock_items').insert({
+          name: item.matiere, unit: item.unite || 'g',
+          category: item.categorie || 'DIVERS',
+          matiere_ref: item.matiere, current_qty: 0,
+          min_qty: 0, ideal_qty: 0, active: true,
+        })
+      }
+    }
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, actif: newVal } : i))
   }
 
