@@ -344,16 +344,25 @@ function TabInventaire({ isManager, profile }) {
 
     const enriched=(si||[])
       .filter(item => {
-        if (!item.matiere_ref) return true // pas lié à une matière → afficher quand même
+        if (!item.matiere_ref) return true
         return activeMpNames.has(norm(item.matiere_ref))
       })
-      .map(item=>({
-        ...item,
-        debut:       prevMap[item.name] ?? parseFloat(item.current_qty||0),
-        receptions:  recuMap[item.id]||0,
-        perdus:      pertesMap[item.name]||0,
-        itemFmts:    fmtMap[norm(item.matiere_ref||item.name)]||[],
-      }))
+      .map(item=>{
+        const receptions = recuMap[item.id]||0
+        const perdus     = pertesMap[item.name]||0
+        // Si inventaire précédent → utiliser comme début
+        // Sinon → current_qty MOINS les réceptions de la période (pour éviter double comptage)
+        const debut = prevMap[item.name] != null
+          ? prevMap[item.name]
+          : Math.max(0, parseFloat(item.current_qty||0) - receptions)
+        return {
+          ...item,
+          debut,
+          receptions,
+          perdus,
+          itemFmts: fmtMap[norm(item.matiere_ref||item.name)]||[],
+        }
+      })
 
     const invMap={}
     for (const i of (existing||[])) invMap[i.item_name]={qty_native:i.qte_physique,qty_formats:{}}
