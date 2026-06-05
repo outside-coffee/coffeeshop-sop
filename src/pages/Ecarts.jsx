@@ -108,9 +108,23 @@ export default function Ecarts() {
       const stockFin=invFinMap[k]??null
       const recu=recuMap[k]||0
       const perdus=pertesMap[k]||0
-      let consoReelle=null
-      if (stockDebut!==null&&stockFin!==null) consoReelle=stockDebut+recu-stockFin-perdus
-      else if (stockFin!==null) consoReelle=recu-stockFin-perdus
+      // Conso réelle :
+      // - Si inventaire physique → stock_début + réceptions − stock_fin − pertes
+      // - Sans inventaire → stock_début + réceptions − current_qty − pertes (estimé)
+      let consoReelle = null
+      let isEstime    = false
+      const siItem    = (stockItems||[]).find(s => norm(s.matiere_ref||s.name) === k)
+      const currentQty = siItem ? parseFloat(siItem.current_qty||0) : null
+
+      if (stockFin !== null) {
+        const debut = stockDebut !== null ? stockDebut : 0
+        const val   = debut + recu - stockFin - perdus
+        if (val >= 0) consoReelle = val
+      } else if (currentQty !== null) {
+        const debut = stockDebut !== null ? stockDebut : currentQty
+        const val   = debut + recu - currentQty - perdus
+        if (val >= 0) { consoReelle = val; isEstime = true }
+      }
       const ecart=consoReelle!==null?consoTheo-consoReelle:null
       const ecartPct=consoTheo>0&&consoReelle!==null?pct(consoTheo,consoReelle):null
       const prixUnit=info.prixUnit||0
@@ -121,7 +135,7 @@ export default function Ecarts() {
         consoTheo:parseFloat(consoTheo.toFixed(2)), consoReelle:consoReelle!==null?parseFloat(consoReelle.toFixed(2)):null,
         ecart:ecart!==null?parseFloat(ecart.toFixed(2)):null, ecartPct,
         coutTheo:parseFloat(coutTheo.toFixed(3)), coutEcart:coutEcart!==null?parseFloat(coutEcart.toFixed(3)):null,
-        prixUnit, hasInventaire:stockFin!==null,
+        prixUnit, hasInventaire:stockFin!==null, isEstime,
       })
     }
 
@@ -284,15 +298,16 @@ export default function Ecarts() {
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
                       <div style={{fontWeight:700,fontSize:'0.88rem',flex:1,paddingRight:8}}>{r.matiere}</div>
                       {ep!=null?(
-                        <div style={{fontWeight:800,fontSize:'0.85rem',color:col,background:col+'18',borderRadius:6,padding:'2px 8px',flexShrink:0}}>
+                        <div style={{fontWeight:800,fontSize:'0.85rem',color:col,background:col+'18',borderRadius:6,padding:'2px 8px',flexShrink:0,display:'flex',alignItems:'center',gap:4}}>
                           {ep>0?'+':''}{ep}%
+                          {r.isEstime && <span style={{fontSize:'0.6rem',fontWeight:600,opacity:0.7}}>est.</span>}
                         </div>
                       ):<span style={{fontSize:'0.75rem',color:'var(--muted)'}}>Sans inv.</span>}
                     </div>
                     {/* LIGNE 2 — théo / réel / coût */}
                     <div style={{display:'flex',gap:12,fontSize:'0.72rem',color:'var(--muted)',flexWrap:'wrap'}}>
                       <span>Théo: <strong style={{color:'var(--outside-dark)'}}>{f1(r.consoTheo)} {r.unite}</strong></span>
-                      {r.hasInventaire&&<span>Réel: <strong style={{color:'var(--outside-dark)'}}>{f1(r.consoReelle)} {r.unite}</strong></span>}
+                      {r.consoReelle!=null&&<span>Réel: <strong style={{color:'var(--outside-dark)'}}>{f1(r.consoReelle)} {r.unite}</strong>{r.isEstime&&<span style={{fontSize:'0.65rem',color:'var(--muted)',marginLeft:3}}>estimé</span>}</span>}
                       <span style={{marginLeft:'auto'}}>
                         {fDT(r.coutTheo)}
                         {r.coutEcart!=null&&Math.abs(r.coutEcart)>0.01&&(
