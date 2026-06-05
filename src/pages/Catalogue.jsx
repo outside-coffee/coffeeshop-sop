@@ -93,13 +93,15 @@ function MatieresTab() {
   async function toggleActive(item) {
     const newVal = item.actif === false ? true : false
     if (!newVal) {
-      // Vérifier si utilisée en composition avant de désactiver
-      const { count } = await supabase
+      // Vérifier si utilisée dans des compositions de produits ACTIFS
+      const { data: compos } = await supabase
         .from('composition_produit')
-        .select('*', { count: 'exact', head: true })
+        .select('nom_produit, actif')
         .ilike('matiere', item.matiere)
-      if (count > 0) {
-        alert(`Impossible de désactiver "${item.matiere}" : utilisée dans ${count} composition(s).\nRetirez-la des recettes d'abord.`)
+      const activeCompos = (compos||[]).filter(c => c.actif !== false)
+      if (activeCompos.length > 0) {
+        const prodNoms = [...new Set(activeCompos.map(c => c.nom_produit))].slice(0,3).join(', ')
+        alert(`Impossible de désactiver "${item.matiere}" : utilisée dans des produits actifs (${prodNoms}...).\nDésactivez ces produits d'abord dans l'onglet Produits.`)
         return
       }
     }
@@ -718,6 +720,8 @@ function ProduitsTab() {
   async function toggleProduitActive(p) {
     const newVal = p.actif === false ? true : false
     await supabase.from('produits').update({ actif: newVal }).eq('id_produit', p.id_produit)
+    // Désactiver/réactiver aussi les compositions du produit
+    await supabase.from('composition_produit').update({ actif: newVal }).eq('nom_produit', p.nom_produit)
     setProduits(prev => prev.map(x => x.id_produit === p.id_produit ? { ...x, actif: newVal } : x))
   }
 
