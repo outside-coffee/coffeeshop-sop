@@ -100,13 +100,15 @@ function MatieresTab() {
         .ilike('matiere', item.matiere)
       if (compos?.length > 0) {
         const nomsProduits = [...new Set(compos.map(c => c.nom_produit))]
-        // Vérifier si ces produits sont actifs dans la table produits
-        const { data: produitsActifs } = await supabase
+        // Vérifier si ces produits sont actifs — comparaison insensible à la casse
+        const { data: tousLesProduits } = await supabase
           .from('produits')
-          .select('nom_produit')
-          .in('nom_produit', nomsProduits)
+          .select('nom_produit, actif')
           .or('actif.eq.true,actif.is.null')
-        if (produitsActifs?.length > 0) {
+        const normp = s => s?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()||''
+        const nomsNorm = new Set(nomsProduits.map(normp))
+        const produitsActifs = (tousLesProduits||[]).filter(p => nomsNorm.has(normp(p.nom_produit)))
+        if (produitsActifs.length > 0) {
           const noms = produitsActifs.map(p => p.nom_produit).slice(0,3).join(', ')
           alert(`Impossible de désactiver "${item.matiere}" : utilisée dans des produits actifs (${noms}).\nDésactivez ces produits d'abord dans l'onglet Produits.`)
           return
