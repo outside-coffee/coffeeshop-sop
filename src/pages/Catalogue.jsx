@@ -739,11 +739,19 @@ function ProduitsTab() {
     const newVal = p.actif === false ? true : false
     const { error } = await supabase.from('produits').update({ actif: newVal }).eq('id_produit', p.id_produit)
     if (error) { alert('Erreur: '+error.message); return }
-    // Cascade vers compositions — insensible à la casse
-    const { error: compErr } = await supabase.from('composition_produit')
-      .update({ actif: newVal })
+    // Cascade vers compositions — récupérer IDs d'abord (ilike ne marche pas avec update)
+    const { data: compoIds } = await supabase
+      .from('composition_produit')
+      .select('id')
       .ilike('nom_produit', p.nom_produit)
-    if (compErr) alert('Erreur composition: '+compErr.message)
+    if (compoIds?.length > 0) {
+      const ids = compoIds.map(c => c.id)
+      const { error: compErr } = await supabase
+        .from('composition_produit')
+        .update({ actif: newVal })
+        .in('id', ids)
+      if (compErr) alert('Erreur composition: '+compErr.message)
+    }
     setProduits(prev => prev.map(x => x.id_produit === p.id_produit ? { ...x, actif: newVal } : x))
   }
 
