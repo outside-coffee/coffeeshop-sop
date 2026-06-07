@@ -93,16 +93,24 @@ function MatieresTab() {
   async function toggleActive(item) {
     const newVal = item.actif === false ? true : false
     if (!newVal) {
-      // Vérifier si utilisée dans des compositions de produits ACTIFS
+      // Trouver les produits actifs qui utilisent cette matière
       const { data: compos } = await supabase
         .from('composition_produit')
-        .select('nom_produit, actif')
+        .select('nom_produit')
         .ilike('matiere', item.matiere)
-      const activeCompos = (compos||[]).filter(c => c.actif !== false)
-      if (activeCompos.length > 0) {
-        const prodNoms = [...new Set(activeCompos.map(c => c.nom_produit))].slice(0,3).join(', ')
-        alert(`Impossible de désactiver "${item.matiere}" : utilisée dans des produits actifs (${prodNoms}...).\nDésactivez ces produits d'abord dans l'onglet Produits.`)
-        return
+      if (compos?.length > 0) {
+        const nomsProduits = [...new Set(compos.map(c => c.nom_produit))]
+        // Vérifier si ces produits sont actifs dans la table produits
+        const { data: produitsActifs } = await supabase
+          .from('produits')
+          .select('nom_produit')
+          .in('nom_produit', nomsProduits)
+          .neq('actif', false)
+        if (produitsActifs?.length > 0) {
+          const noms = produitsActifs.map(p => p.nom_produit).slice(0,3).join(', ')
+          alert(`Impossible de désactiver "${item.matiere}" : utilisée dans des produits actifs (${noms}).\nDésactivez ces produits d'abord dans l'onglet Produits.`)
+          return
+        }
       }
     }
     const { error } = await supabase.from('matiere_premiere').update({ actif: newVal }).eq('id', item.id)
@@ -499,11 +507,21 @@ function CompositionTab() {
 
   async function saveLine(form) {
     setSaving(true)
+    const payload = {
+      nom_produit: form.nom_produit,
+      matiere:     form.matiere,
+      quantite_m:  parseFloat(form.quantite_m),
+      unite:       form.unite,
+      prix_achat:  parseFloat(form.prix_achat||0),
+      type:        form.type,
+    }
     if (form.id) {
-      await supabase.from('composition_produit').update(form).eq('id', form.id)
-      setItems(prev => prev.map(i => i.id === form.id ? { ...i, ...form } : i))
+      const { error } = await supabase.from('composition_produit').update(payload).eq('id', form.id)
+      if (error) { alert('Erreur: '+error.message); setSaving(false); return }
+      setItems(prev => prev.map(i => i.id === form.id ? { ...i, ...payload, id: form.id } : i))
     } else {
-      const { data } = await supabase.from('composition_produit').insert(form).select().single()
+      const { data, error } = await supabase.from('composition_produit').insert(payload).select().single()
+      if (error) { alert('Erreur: '+error.message); setSaving(false); return }
       if (data) setItems(prev => [...prev, data])
     }
     setSaving(false); setModal(false); setEditLine(null)
@@ -720,8 +738,6 @@ function ProduitsTab() {
   async function toggleProduitActive(p) {
     const newVal = p.actif === false ? true : false
     await supabase.from('produits').update({ actif: newVal }).eq('id_produit', p.id_produit)
-    // Désactiver/réactiver aussi les compositions du produit
-    await supabase.from('composition_produit').update({ actif: newVal }).eq('nom_produit', p.nom_produit)
     setProduits(prev => prev.map(x => x.id_produit === p.id_produit ? { ...x, actif: newVal } : x))
   }
 
