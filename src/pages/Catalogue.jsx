@@ -108,12 +108,12 @@ function MatieresTab() {
         const normp = s => s?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()||''
         const nomsNorm = new Set(nomsProduits.map(normp))
         const produitsActifs = (tousLesProduits||[]).filter(p => nomsNorm.has(normp(p.nom_produit)))
-        alert('DEBUG nomsNorm: '+[...nomsNorm].join(',')+' | produitsActifs: '+produitsActifs.map(p=>p.nom_produit+':'+p.actif).join(','))
+        alert('DEBUG: produitsActifs.length='+produitsActifs.length+' nomsNorm='+[...nomsNorm].join(','))
         if (produitsActifs.length > 0) {
-          const noms = produitsActifs.map(p => p.nom_produit).slice(0,3).join(', ')
-          alert(`Impossible de désactiver "${item.matiere}" : utilisée dans des produits actifs (${noms}).\nDésactivez ces produits d'abord dans l'onglet Produits.`)
+          alert('BLOQUE: '+produitsActifs.map(p=>p.nom_produit+':'+p.actif).join(','))
           return
         }
+        alert('PASSE: desactivation OK')
       }
     }
     const { error } = await supabase.from('matiere_premiere').update({ actif: newVal }).eq('id', item.id)
