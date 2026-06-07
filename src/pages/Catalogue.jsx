@@ -739,8 +739,11 @@ function ProduitsTab() {
     const newVal = p.actif === false ? true : false
     const { error } = await supabase.from('produits').update({ actif: newVal }).eq('id_produit', p.id_produit)
     if (error) { alert('Erreur: '+error.message); return }
-    // Cascade vers compositions
-    await supabase.from('composition_produit').update({ actif: newVal }).eq('nom_produit', p.nom_produit)
+    // Cascade vers compositions — insensible à la casse
+    const { error: compErr } = await supabase.from('composition_produit')
+      .update({ actif: newVal })
+      .ilike('nom_produit', p.nom_produit)
+    if (compErr) alert('Erreur composition: '+compErr.message)
     setProduits(prev => prev.map(x => x.id_produit === p.id_produit ? { ...x, actif: newVal } : x))
   }
 
