@@ -61,22 +61,29 @@ function MatieresTab() {
 
   async function saveItem(form) {
     setSaving(true)
+    const { min_qty, ideal_qty, ...mpForm } = form
     if (form.id) {
-      await supabase.from('matiere_premiere').update(form).eq('id', form.id)
-      setItems(prev => prev.map(i => i.id === form.id ? { ...i, ...form } : i))
+      await supabase.from('matiere_premiere').update(mpForm).eq('id', form.id)
+      setItems(prev => prev.map(i => i.id === form.id ? { ...i, ...mpForm } : i))
+      // Mettre à jour stock_items min/ideal
+      if (min_qty !== '' || ideal_qty !== '') {
+        await supabase.from('stock_items').update({
+          min_qty:   parseFloat(min_qty||0),
+          ideal_qty: parseFloat(ideal_qty||0),
+        }).eq('matiere_ref', form.matiere)
+      }
     } else {
-      const { data } = await supabase.from('matiere_premiere').insert(form).select().single()
+      const { data } = await supabase.from('matiere_premiere').insert(mpForm).select().single()
       if (data) {
         setItems(prev => [...prev, data].sort((a,b) => a.matiere.localeCompare(b.matiere)))
-        // Créer automatiquement l'entrée dans stock_items
         await supabase.from('stock_items').insert({
           name:        data.matiere,
           unit:        data.unite || 'g',
           category:    data.categorie || 'DIVERS',
           matiere_ref: data.matiere,
           current_qty: 0,
-          min_qty:     0,
-          ideal_qty:   0,
+          min_qty:     parseFloat(min_qty||0),
+          ideal_qty:   parseFloat(ideal_qty||0),
           active:      true,
         })
       }
@@ -108,12 +115,11 @@ function MatieresTab() {
         const normp = s => s?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim()||''
         const nomsNorm = new Set(nomsProduits.map(normp))
         const produitsActifs = (tousLesProduits||[]).filter(p => nomsNorm.has(normp(p.nom_produit)))
-        alert('DEBUG: produitsActifs.length='+produitsActifs.length+' nomsNorm='+[...nomsNorm].join(','))
         if (produitsActifs.length > 0) {
-          alert('BLOQUE: '+produitsActifs.map(p=>p.nom_produit+':'+p.actif).join(','))
+          const noms = produitsActifs.map(p => p.nom_produit).slice(0,3).join(', ')
+          alert(`Impossible de désactiver "${item.matiere}" : utilisée dans des produits actifs (${noms}).\nDésactivez ces produits d'abord dans l'onglet Produits.`)
           return
         }
-        alert('PASSE: desactivation OK')
       }
     }
     const { error } = await supabase.from('matiere_premiere').update({ actif: newVal }).eq('id', item.id)
@@ -419,7 +425,18 @@ function MatiereModal({ item, onClose, onSave, saving }) {
     unite:     item?.unite     || 'g',
     quantite:  item?.quantite  || 1000,
     prix:      item?.prix      || '',
+    min_qty:   item?.min_qty   ?? '',
+    ideal_qty: item?.ideal_qty ?? '',
   })
+  // Charger min/ideal depuis stock_items
+  const [stockItem, setStockItem] = useState(null)
+  useEffect(() => {
+    if (!item?.matiere) return
+    supabase.from('stock_items').select('id,min_qty,ideal_qty').eq('matiere_ref', item.matiere).single()
+      .then(({ data }) => {
+        if (data) { setStockItem(data); set('min_qty', data.min_qty || ''); set('ideal_qty', data.ideal_qty || '') }
+      })
+  }, [item?.matiere])
   const [historique, setHistorique] = useState([])
   const set = (k,v) => setForm(p => ({ ...p, [k]: v }))
 
@@ -460,6 +477,18 @@ function MatiereModal({ item, onClose, onSave, saving }) {
       </div>
       <div style={{ background: 'var(--outside-cream)', borderRadius: 'var(--radius-md)', padding: '8px 12px', fontSize: '0.8rem', color: 'var(--muted)' }}>
         Prix unitaire : <strong style={{ color: 'var(--ink)' }}>{form.prix && form.quantite ? (form.prix/form.quantite).toFixed(4) : '—'} DT/{form.unite}</strong>
+      </div>
+
+      {/* SEUILS STOCK */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginTop: '0.5rem' }}>
+        <div className="form-group">
+          <label className="form-label">Stock minimum ({form.unite})</label>
+          <input className="form-input" type="number" min="0" value={form.min_qty} onChange={e => set('min_qty', e.target.value)} placeholder="0"/>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Stock idéal ({form.unite})</label>
+          <input className="form-input" type="number" min="0" value={form.ideal_qty} onChange={e => set('ideal_qty', e.target.value)} placeholder="0"/>
+        </div>
       </div>
 
       {historique.length > 0 && (
