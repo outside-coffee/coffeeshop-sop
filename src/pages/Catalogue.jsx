@@ -105,7 +105,7 @@ function MatieresTab() {
           .from('produits')
           .select('nom_produit')
           .in('nom_produit', nomsProduits)
-          .neq('actif', false)
+          .or('actif.eq.true,actif.is.null')
         if (produitsActifs?.length > 0) {
           const noms = produitsActifs.map(p => p.nom_produit).slice(0,3).join(', ')
           alert(`Impossible de désactiver "${item.matiere}" : utilisée dans des produits actifs (${noms}).\nDésactivez ces produits d'abord dans l'onglet Produits.`)
@@ -737,7 +737,10 @@ function ProduitsTab() {
 
   async function toggleProduitActive(p) {
     const newVal = p.actif === false ? true : false
-    await supabase.from('produits').update({ actif: newVal }).eq('id_produit', p.id_produit)
+    const { error } = await supabase.from('produits').update({ actif: newVal }).eq('id_produit', p.id_produit)
+    if (error) { alert('Erreur: '+error.message); return }
+    // Cascade vers compositions
+    await supabase.from('composition_produit').update({ actif: newVal }).eq('nom_produit', p.nom_produit)
     setProduits(prev => prev.map(x => x.id_produit === p.id_produit ? { ...x, actif: newVal } : x))
   }
 
