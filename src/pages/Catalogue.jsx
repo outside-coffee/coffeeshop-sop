@@ -757,6 +757,10 @@ function ProduitsTab() {
           <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
           <input className="form-input" style={{ paddingLeft: 36 }} placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <button className={`btn btn-sm ${showInactive ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setShowInactive(v => !v)}>
+          {showInactive ? '✓ Inactifs' : 'Inactifs'}
+        </button>
         {isManager && <button className="btn btn-primary btn-sm" onClick={() => { setEdit(null); setModal(true) }}><Plus size={14} /></button>}
       </div>
 
@@ -784,10 +788,10 @@ function ProduitsTab() {
                 {isManager && <>
                   <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--muted)' }} onClick={() => { setEdit(p); setModal(true) }}><Edit2 size={12} /></button>
                   <button className="btn btn-ghost btn-icon btn-sm"
-                    style={{ color: p.actif === false ? 'var(--outside-green)' : 'var(--danger)' }}
+                    style={{ color: p.actif === false ? 'var(--outside-green)' : 'var(--danger)', fontWeight: 700, fontSize: '0.75rem', padding: '2px 6px' }}
                     title={p.actif === false ? 'Réactiver' : 'Désactiver'}
                     onClick={() => toggleProduitActive(p)}>
-                    {p.actif === false ? '✓' : '✕'}
+                    {p.actif === false ? '↺ Réactiver' : '✕'}
                   </button>
                 </>}
               </div>
