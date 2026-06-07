@@ -542,8 +542,14 @@ function CompositionTab() {
     grouped[k].push(c)
   }
 
+  const [showInactiveCompo, setShowInactiveCompo] = useState(false)
+
   const filteredKeys = Object.keys(grouped).filter(k => {
-    const [,name] = k.split('|||')
+    const [type, name] = k.split('|||')
+    const lines = grouped[k]
+    const isInactive = lines.every(l => l.actif === false)
+    if (!showInactiveCompo && isInactive) return false
+    if (showInactiveCompo && !isInactive) return false
     return !search || name.toLowerCase().includes(search.toLowerCase())
   })
 
@@ -554,6 +560,10 @@ function CompositionTab() {
           <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
           <input className="form-input" style={{ paddingLeft: 36 }} placeholder="Rechercher un produit..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <button className={`btn btn-sm ${showInactiveCompo ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setShowInactiveCompo(v => !v)}>
+          {showInactiveCompo ? '✓ Inactifs' : 'Inactifs'}
+        </button>
         {isManager && <button className="btn btn-primary btn-sm" onClick={() => { setEditLine(null); setModal(true) }}><Plus size={14} /></button>}
       </div>
 
@@ -566,9 +576,9 @@ function CompositionTab() {
             const coutTotal = lines.reduce((s, l) => s + parseFloat(l.prix_achat || 0), 0)
             return (
               <div key={k} className="card">
-                <div style={{ padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => setExpanded(isOpen ? null : k)}>
+                <div style={{ padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', opacity: lines.every(l=>l.actif===false)?0.5:1 }} onClick={() => setExpanded(isOpen ? null : k)}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{name}</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.875rem', textDecoration: lines.every(l=>l.actif===false)?'line-through':'' }}>{name}</div>
                     <div style={{ fontSize: '0.65rem', marginTop: 2 }}>
                       <span style={{ color: type === 'base' ? '#3D5A8A' : type === 'produit fini' ? 'var(--outside-green)' : 'var(--outside-orange)', fontWeight: 800, background: type === 'base' ? '#EBF2FD' : type === 'produit fini' ? '#E0F2EB' : '#FEF3DC', padding: '1px 7px', borderRadius: 'var(--radius-pill)' }}>{type}</span>
                       <span style={{ color: 'var(--muted)', marginLeft: 8 }}>{lines.length} ingrédient{lines.length > 1 ? 's' : ''} · {coutTotal.toFixed(3)} DT</span>
