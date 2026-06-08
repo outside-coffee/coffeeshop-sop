@@ -316,7 +316,7 @@ tr:nth-child(even) td{background:#fafafa}
                 return (
                   <div key={r.matiere} style={{borderBottom:idx<rows.length-1?'1px solid var(--outside-cream)':'none'}}>
                     {/* LIGNE PRINCIPALE */}
-                    <div style={{padding:'0.75rem 1rem',cursor:'pointer'}} onClick={()=>setExpanded(isOpen?null:r.matiere)}>
+                    <div style={{padding:'0.75rem 1rem',cursor:'pointer'}} onClick={()=>{ const next=isOpen?null:r.matiere; setExpanded(next); if(next) loadConsoDetail(r) }}>
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
                         <div style={{fontWeight:700,fontSize:'0.88rem',flex:1,paddingRight:8}}>{r.matiere}</div>
                         <div style={{display:'flex',alignItems:'center',gap:8}}>
