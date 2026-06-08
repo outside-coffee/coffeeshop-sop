@@ -124,23 +124,28 @@ export default function Ecarts() {
   const avecInv        = rows.filter(r=>r.hasInventaire).length
 
   async function loadConsoDetail(r) {
-    if (consoDetail[r.k]) return // déjà chargé
+    if (consoDetail[r.k]?.length >= 0 && consoDetail[r.k] !== undefined) return
     setLoadingDetail(r.matiere)
+    // Charger toutes les lignes pour cette matière — pas de filtre ilike qui peut rater
     const { data } = await supabase
       .from('v_conso_detail')
-      .select('produit, nb_ventes, grammage_unitaire, qte_conso')
-      .ilike('matiere', r.matiere)
+      .select('produit, nb_ventes, grammage_unitaire, qte_conso, matiere')
       .gte('date_vente', dateFrom)
       .lte('date_vente', dateTo)
+    
+    // Filtrer côté JS avec normalisation
+    const mNorm = norm(r.matiere)
+    const filtered = (data||[]).filter(row => norm(row.matiere) === mNorm)
+    
     // Agréger par produit
     const map = {}
-    for (const row of (data||[])) {
-      if (!map[row.produit]) map[row.produit] = { produit: row.produit, nb_ventes: 0, grammage: row.grammage_unitaire, total: 0 }
+    for (const row of filtered) {
+      if (!map[row.produit]) map[row.produit] = { produit: row.produit, nb_ventes: 0, grammage: parseFloat(row.grammage_unitaire||0), total: 0 }
       map[row.produit].nb_ventes += parseFloat(row.nb_ventes||0)
       map[row.produit].total     += parseFloat(row.qte_conso||0)
     }
     const sorted = Object.values(map).sort((a,b)=>b.total-a.total)
-    setConsoDetail(prev => ({ ...prev, [r.k]: sorted }))
+    setConsoDetail(prev => ({ ...prev, [r.k]: sorted.length > 0 ? sorted : [] }))
     setLoadingDetail(null)
   }
 
