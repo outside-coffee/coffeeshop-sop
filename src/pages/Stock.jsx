@@ -150,8 +150,11 @@ function TabDashboard() {
                 <div key={item.id} style={{padding:'0.7rem 1rem',borderBottom:idx<arr.length-1?'1.5px solid var(--outside-cream)':'none'}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
                     <div style={{fontWeight:700,fontSize:'0.85rem'}}>{item.name}</div>
-                    <div style={{fontWeight:800,fontSize:'0.85rem',color:item.alerte?'var(--danger)':'var(--outside-dark)'}}>
-                      {item.current_qty} <span style={{fontWeight:400,fontSize:'0.7rem',color:'var(--muted)'}}>{item.unit}</span>
+                    <div style={{textAlign:'right'}}>
+                      <div style={{fontWeight:800,fontSize:'0.85rem',color:item.alerte?'var(--danger)':'var(--outside-dark)'}}>
+                        {parseFloat(item.current_qty||0).toFixed(0)} <span style={{fontWeight:400,fontSize:'0.7rem',color:'var(--muted)'}}>{item.unit}</span>
+                      </div>
+                      {item.hasInv && <div style={{fontSize:'0.6rem',color:'var(--muted)'}}>théorique</div>}
                     </div>
                   </div>
                   <div style={{height:4,background:'var(--outside-cream2)',borderRadius:2,overflow:'hidden',marginBottom:3}}>
