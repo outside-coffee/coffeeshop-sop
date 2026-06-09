@@ -187,7 +187,6 @@ function TabDashboard() {
                         {parseFloat(item.current_qty||0).toFixed(0)} <span style={{fontWeight:400,fontSize:'0.7rem',color:'var(--muted)'}}>{item.unit}</span>
                       </div>
                       {item.hasInv && <div style={{fontSize:'0.6rem',color:'var(--muted)'}}>théorique</div>}
-                  {item.name==='Café' && <div style={{fontSize:'0.6rem',color:'red'}}>hasInv:{String(item.hasInv)} inv:{item.stockDebug_debut} rec:{item.stockDebug_recu} conso:{item.stockDebug_conso} date:{item.lastInvDate}</div>}
                     </div>
                   </div>
                   <div style={{height:4,background:'var(--outside-cream2)',borderRadius:2,overflow:'hidden',marginBottom:3}}>
