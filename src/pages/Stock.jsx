@@ -215,7 +215,7 @@ function TabMouvements({ isManager, profile }) {
   const [loading, setLoading]     = useState(true)
   const [saving, setSaving]       = useState(false)
 
-  const [dateFrom, setDateFrom] = useState(format(new Date(new Date().setDate(new Date().getDate()-7)),'yyyy-MM-dd'))
+  const [dateFrom, setDateFrom] = useState(format(startOfMonth(new Date()),'yyyy-MM-dd'))
   const [dateTo,   setDateTo]   = useState(format(new Date(),'yyyy-MM-dd'))
 
   useEffect(()=>{ loadData() },[dateFrom, dateTo])
