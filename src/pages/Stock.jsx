@@ -259,7 +259,7 @@ function TabMouvements({ isManager, profile }) {
       const { data } = await supabase.storage.from('factures').upload(path, factureFile)
       if (data) facture_url = data.path
     }
-    const { error: mvtError } = await supabase.from('stock_movements').insert({item_id:item.id,qty:parseFloat(qty),type:'reception',note:note||null,fournisseur:fournisseur||null,facture_url,done_by:profile?.id,created_at:form.date_reception+'T12:00:00'})
+    const { error: mvtError } = await supabase.from('stock_movements').insert({item_id:item.id,qty:parseFloat(qty),type:'reception',note:note||null,fournisseur:fournisseur||null,facture_url,done_by:profile?.id,created_at:form.date_reception+'T12:00:00',prix:parseFloat(prix||0)})
     if (mvtError) { alert('Erreur mouvement: '+mvtError.message); setSaving(false); return }
     const { error: siError } = await supabase.from('stock_items').update({current_qty:parseFloat(item.current_qty||0)+parseFloat(qty),updated_at:new Date().toISOString()}).eq('id',item.id)
     if (siError) { alert('Erreur stock: '+siError.message); setSaving(false); return }
@@ -286,6 +286,29 @@ function TabMouvements({ isManager, profile }) {
         <input className="form-input" type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{fontSize:'0.8rem'}}/>
         <input className="form-input" type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{fontSize:'0.8rem'}}/>
       </div>
+
+      {/* KPIs PÉRIODE */}
+      {!loading && mouvements.length > 0 && (() => {
+        const totalReceptions = mouvements.filter(m=>m._type==='reception').reduce((s,m)=>s+parseFloat(m.prix||0),0)
+        const nbReceptions    = mouvements.filter(m=>m._type==='reception').length
+        const nbPertes        = mouvements.filter(m=>m._type==='perte').length
+        return (
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:'0.75rem'}}>
+            <div className="card" style={{padding:'0.6rem 0.75rem'}}>
+              <div style={{fontWeight:800,fontSize:'0.9rem',color:'var(--outside-green)'}}>{totalReceptions.toFixed(2)} DT</div>
+              <div style={{fontSize:'0.6rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)',marginTop:1}}>Valeur reçue</div>
+            </div>
+            <div className="card" style={{padding:'0.6rem 0.75rem'}}>
+              <div style={{fontWeight:800,fontSize:'0.9rem',color:'var(--outside-dark)'}}>{nbReceptions}</div>
+              <div style={{fontSize:'0.6rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)',marginTop:1}}>Réceptions</div>
+            </div>
+            <div className="card" style={{padding:'0.6rem 0.75rem'}}>
+              <div style={{fontWeight:800,fontSize:'0.9rem',color:'var(--danger)'}}>{nbPertes}</div>
+              <div style={{fontSize:'0.6rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)',marginTop:1}}>Pertes</div>
+            </div>
+          </div>
+        )
+      })()}
 
       {loading ? <div style={{display:'flex',justifyContent:'center',padding:'2rem'}}><Spinner size={24}/></div> : (
         <div className="card">
@@ -314,6 +337,7 @@ return (
                   <div style={{fontWeight:800,fontSize:'0.9rem',color:isReception?'var(--outside-green)':'var(--danger)'}}>
                     {isReception?'+':'-'}{isReception?m.qty:m.qte} <span style={{fontSize:'0.65rem',fontWeight:400}}>{m._unit}</span>
                   </div>
+                  {isReception&&m.prix>0&&<div style={{fontSize:'0.7rem',fontWeight:700,color:'var(--outside-green)'}}>{parseFloat(m.prix).toFixed(2)} DT</div>}
                   <div style={{fontSize:'0.65rem',color:'var(--muted)'}}>{format(new Date(m._date),'d MMM',{locale:fr})}</div>
                 </div>
               </div>
