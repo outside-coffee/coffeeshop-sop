@@ -829,32 +829,31 @@ function ProduitsTab() {
 
       {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Spinner size={24} /></div> : (
         <div className="card">
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px,1fr) 55px 55px 55px 60px', gap: 4, padding: '0.5rem 1rem', borderBottom: '1.5px solid var(--outside-cream)', background: 'var(--outside-cream)' }}>
-            {['Produit','Prix','Coût','Marge','Tx %'].map(h => <div key={h} style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', textAlign: h==='Produit'?'left':'right' }}>{h}</div>)}
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(100px,1fr) 50px 48px 48px 44px', gap: 4, padding: '0.5rem 1rem', borderBottom: '1.5px solid var(--outside-cream)', background: 'var(--outside-cream)' }}>
+            {['Produit','Prix','Coût','Marge','Tx %'].map(h => <div key={h} style={{ fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', textAlign: h==='Produit'?'left':'right' }}>{h}</div>)}
           </div>
           {filtered.map((p, idx) => (
-            <div key={p.id_produit} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px,1fr) 55px 55px 55px 60px', gap: 4, padding: '0.7rem 1rem', borderBottom: idx < filtered.length-1 ? '1.5px solid var(--outside-cream)' : 'none', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: p.actif === false ? 0.4 : 1, textDecoration: p.actif === false ? 'line-through' : 'none' }}>{p.nom_produit}</div>
-                <div style={{ fontSize: '0.65rem', color: 'var(--outside-orange)', fontWeight: 700 }}>{p.famille}</div>
+            <div key={p.id_produit} style={{ borderBottom: idx < filtered.length-1 ? '1.5px solid var(--outside-cream)' : 'none' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(100px,1fr) 50px 48px 48px 44px', gap: 4, padding: '0.6rem 1rem', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: p.actif === false ? 0.4 : 1, textDecoration: p.actif === false ? 'line-through' : 'none' }}>{p.nom_produit}</div>
+                  <div style={{ fontSize: '0.62rem', color: 'var(--outside-orange)', fontWeight: 700 }}>{p.famille}</div>
+                </div>
+                <div style={{ textAlign: 'right', fontWeight: 800, fontSize: '0.8rem' }}>{p.prix} DT</div>
+                <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 600 }}>{p._cout?.toFixed(2)||'—'}</div>
+                <div style={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 700, color: p._marge>0?'var(--outside-green)':'var(--danger)' }}>{p._marge?.toFixed(2)||'—'}</div>
+                <div style={{ textAlign: 'right', fontSize: '0.75rem', fontWeight: 800, color: p._txMarge>=60?'var(--outside-green)':p._txMarge>=40?'var(--outside-amber)':'var(--danger)' }}>{p._txMarge?.toFixed(0)||'—'}%</div>
               </div>
-              <div style={{ textAlign: 'right', fontWeight: 800, fontSize: '0.82rem' }}>{p.prix} DT</div>
-              <div style={{ textAlign: 'right', fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 600 }}>{p._cout?.toFixed(2)||'—'}</div>
-              <div style={{ textAlign: 'right', fontSize: '0.78rem', fontWeight: 700, color: p._marge>0?'var(--outside-green)':'var(--danger)' }}>{p._marge?.toFixed(2)||'—'}</div>
-              <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: p._txMarge>=60?'var(--outside-green)':p._txMarge>=40?'var(--outside-amber)':'var(--danger)' }}>{p._txMarge?.toFixed(0)||'—'}%</span>
-              <div style={{ display: 'flex', gap: 2, marginLeft: 'auto' }}>
-                {isManager && <>
+              {isManager && (
+                <div style={{ display: 'flex', gap: 6, padding: '0 1rem 0.5rem', justifyContent: 'flex-end' }}>
                   <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--muted)' }} onClick={() => { setEdit(p); setModal(true) }}><Edit2 size={12} /></button>
                   <button className="btn btn-ghost btn-icon btn-sm"
-                    style={{ color: p.actif === false ? 'var(--outside-green)' : 'var(--danger)', fontWeight: 700, fontSize: '0.75rem', padding: '2px 6px' }}
-                    title={p.actif === false ? 'Réactiver' : 'Désactiver'}
+                    style={{ color: p.actif === false ? 'var(--outside-green)' : 'var(--danger)', fontWeight: 700, fontSize: '0.72rem', padding: '2px 6px' }}
                     onClick={() => toggleProduitActive(p)}>
-                    {p.actif === false ? '↺ Réactiver' : '✕'}
+                    {p.actif === false ? '↺' : '✕'}
                   </button>
-                </>}
-              </div>
-              </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
