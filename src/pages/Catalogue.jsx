@@ -722,12 +722,25 @@ function ProduitsTab() {
   useEffect(() => { fetchProduits() }, [])
 
   async function fetchProduits() {
-    const [{ data: prods }, { data: mp }] = await Promise.all([
+    const [{ data: prods }, { data: compoData }, { data: mp }] = await Promise.all([
       supabase.from('produits').select('*').order('famille').order('nom_produit'),
       supabase.from('composition_produit').select('nom_produit,prix_achat').or('actif.eq.true,actif.is.null'),
       supabase.from('matiere_premiere').select('matiere, unite, prix, quantite').or('actif.eq.true,actif.is.null').order('matiere'),
     ])
-    setProduits(prods || [])
+    // Calculer coût par produit
+    const coutMap = {}
+    for (const c of (compoData||[])) {
+      const k = c.nom_produit?.trim().toUpperCase()
+      coutMap[k] = (coutMap[k]||0) + parseFloat(c.prix_achat||0)
+    }
+    const produitsWithCout = (prods||[]).map(p => {
+      const cout = coutMap[p.nom_produit?.trim().toUpperCase()] || parseFloat(p.cout||0) || 0
+      const prix = parseFloat(p.prix||0)
+      const marge = prix - cout
+      const txMarge = prix > 0 ? (marge/prix*100) : 0
+      return {...p, _cout: cout, _marge: marge, _txMarge: txMarge}
+    })
+    setProduits(produitsWithCout)
     setMatieres(mp || [])
     setMpDataFull(mp || [])
     setLoading(false)
