@@ -724,6 +724,7 @@ function ProduitsTab() {
   async function fetchProduits() {
     const [{ data: prods }, { data: mp }] = await Promise.all([
       supabase.from('produits').select('*').order('famille').order('nom_produit'),
+      supabase.from('composition_produit').select('nom_produit,prix_achat').or('actif.eq.true,actif.is.null'),
       supabase.from('matiere_premiere').select('matiere, unite, prix, quantite').or('actif.eq.true,actif.is.null').order('matiere'),
     ])
     setProduits(prods || [])
@@ -828,15 +829,20 @@ function ProduitsTab() {
 
       {loading ? <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Spinner size={24} /></div> : (
         <div className="card">
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px,1fr) minmax(80px,120px) 70px', gap: 6, padding: '0.5rem 1rem', borderBottom: '1.5px solid var(--outside-cream)', background: 'var(--outside-cream)' }}>
-            {['Produit','Famille','Prix'].map(h => <div key={h} style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)' }}>{h}</div>)}
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px,1fr) 55px 55px 55px 60px', gap: 4, padding: '0.5rem 1rem', borderBottom: '1.5px solid var(--outside-cream)', background: 'var(--outside-cream)' }}>
+            {['Produit','Prix','Coût','Marge','Tx %'].map(h => <div key={h} style={{ fontSize: '0.62rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', textAlign: h==='Produit'?'left':'right' }}>{h}</div>)}
           </div>
           {filtered.map((p, idx) => (
-            <div key={p.id_produit} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px,1fr) minmax(80px,120px) 70px', gap: 6, padding: '0.7rem 1rem', borderBottom: idx < filtered.length-1 ? '1.5px solid var(--outside-cream)' : 'none', alignItems: 'center' }}>
-              <div style={{ fontWeight: 700, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: p.actif === false ? 0.4 : 1, textDecoration: p.actif === false ? 'line-through' : 'none' }}>{p.nom_produit}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--outside-orange)', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.famille}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 800 }}>{p.prix} DT</span>
+            <div key={p.id_produit} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px,1fr) 55px 55px 55px 60px', gap: 4, padding: '0.7rem 1rem', borderBottom: idx < filtered.length-1 ? '1.5px solid var(--outside-cream)' : 'none', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: p.actif === false ? 0.4 : 1, textDecoration: p.actif === false ? 'line-through' : 'none' }}>{p.nom_produit}</div>
+                <div style={{ fontSize: '0.65rem', color: 'var(--outside-orange)', fontWeight: 700 }}>{p.famille}</div>
+              </div>
+              <div style={{ textAlign: 'right', fontWeight: 800, fontSize: '0.82rem' }}>{p.prix} DT</div>
+              <div style={{ textAlign: 'right', fontSize: '0.78rem', color: 'var(--muted)', fontWeight: 600 }}>{p._cout?.toFixed(2)||'—'}</div>
+              <div style={{ textAlign: 'right', fontSize: '0.78rem', fontWeight: 700, color: p._marge>0?'var(--outside-green)':'var(--danger)' }}>{p._marge?.toFixed(2)||'—'}</div>
+              <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 800, color: p._txMarge>=60?'var(--outside-green)':p._txMarge>=40?'var(--outside-amber)':'var(--danger)' }}>{p._txMarge?.toFixed(0)||'—'}%</span>
               <div style={{ display: 'flex', gap: 2, marginLeft: 'auto' }}>
                 {isManager && <>
                   <button className="btn btn-ghost btn-icon btn-sm" style={{ color: 'var(--muted)' }} onClick={() => { setEdit(p); setModal(true) }}><Edit2 size={12} /></button>
