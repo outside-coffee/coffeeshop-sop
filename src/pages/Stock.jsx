@@ -438,18 +438,20 @@ function TabInventaire({ isManager, profile }) {
         <div style={{display:'flex',gap:4,alignItems:'center'}}>
           <div style={{fontSize:'0.75rem',fontWeight:700,color:'var(--outside-dark)'}}>Inventaire hebdomadaire</div>
         </div>
-        <div style={{display:'flex',gap:4,alignItems:'center'}}>
-          <button className="btn btn-ghost btn-sm" onClick={()=>setPeriodeDate(d=>typeInv==='hebdo'?subWeeks(d,1):new Date(d.getFullYear(),d.getMonth()-1))}>←</button>
+        <div style={{display:'flex',gap:4,alignItems:'center',flexWrap:'wrap'}}>
+          <button className="btn btn-ghost btn-sm" onClick={()=>setPeriodeDate(d=>subWeeks(d,1))}>←</button>
           <div style={{textAlign:'center',minWidth:140}}>
             <div style={{fontWeight:800,fontSize:'0.82rem'}}>{periode}</div>
             <div style={{fontSize:'0.65rem',color:'var(--muted)',fontWeight:600}}>
-              {typeInv==='hebdo'
-                ? `${format(startOfWeek(periodeDate,{weekStartsOn:1}),'d MMM',{locale:fr})} → ${format(new Date(startOfWeek(periodeDate,{weekStartsOn:1}).getTime()+6*24*60*60*1000),'d MMM yyyy',{locale:fr})}`
-                : format(periodeDate,'MMMM yyyy',{locale:fr})
-              }
+              {format(startOfWeek(periodeDate,{weekStartsOn:1}),'d MMM',{locale:fr})} → {format(new Date(startOfWeek(periodeDate,{weekStartsOn:1}).getTime()+6*24*60*60*1000),'d MMM yyyy',{locale:fr})}
             </div>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={()=>setPeriodeDate(d=>typeInv==='hebdo'?subWeeks(d,-1):new Date(d.getFullYear(),d.getMonth()+1))}>→</button>
+          <button className="btn btn-ghost btn-sm" onClick={()=>setPeriodeDate(d=>subWeeks(d,-1))}>→</button>
+          <input type="date" className="form-input"
+            value={format(periodeDate,'yyyy-MM-dd')}
+            onChange={e=>{ if(e.target.value) setPeriodeDate(new Date(e.target.value+'T12:00:00')) }}
+            style={{fontSize:'0.78rem',width:130,marginLeft:4}}
+            title="Choisir une date dans la semaine"/>
         </div>
         <div style={{marginLeft:'auto',display:'flex',gap:8,alignItems:'center'}}>
           {nbSaisis>0 && <span style={{fontSize:'0.72rem',color:'var(--outside-green)',fontWeight:700}}>{nbSaisis} article{nbSaisis>1?'s':''} saisi{nbSaisis>1?'s':''}</span>}
