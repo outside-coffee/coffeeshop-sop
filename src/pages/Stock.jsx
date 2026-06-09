@@ -51,33 +51,65 @@ function TabDashboard() {
   useEffect(()=>{ load() },[])
 
   async function load() {
-    const [{ data: si }, { data: mp }, { data: mpAll }, { data: pertes }, { data: invLast }] = await Promise.all([
-      supabase.from('stock_items').select('*').eq('active',true).order('category').order('name'),
-      supabase.from('matiere_premiere').select('matiere,prix,quantite').eq('actif',true).order('matiere'),
-      supabase.from('matiere_premiere').select('matiere,actif'),
-      supabase.from('stock_pertes').select('item_name,qte').gte('date_perte', format(startOfMonth(new Date()),'yyyy-MM-dd')),
-      supabase.from('stock_inventaires').select('date_inventaire').order('date_inventaire',{ascending:false}).limit(1),
-    ])
-    const mpMap={}
-    for (const m of (mp||[])) mpMap[norm(m.matiere)] = m.quantite>0 ? m.prix/m.quantite : 0
-    const pertesMap={}
-    for (const p of (pertes||[])) pertesMap[p.item_name]=(pertesMap[p.item_name]||0)+parseFloat(p.qte||0)
+    // 1. Dernier inventaire par article
+    const { data: invData } = await supabase
+      .from('stock_inventaires')
+      .select('item_name,qte_physique,date_inventaire')
+      .order('date_inventaire',{ascending:false})
+      .limit(2000)
 
-    // Lier stock_items aux matières actives uniquement
-    const activeMp = new Set(Object.keys(mpMap))
-    const filtered = (si||[]).filter(item => {
+    const lastInvByItem = {}
+    for (const inv of (invData||[])) {
+      if (!lastInvByItem[inv.item_name]) lastInvByItem[inv.item_name] = inv
+    }
+    const lastInvDate = invData?.[0]?.date_inventaire || null
+    const dateRef = lastInvDate || format(startOfMonth(new Date()),'yyyy-MM-dd')
+    if (lastInvDate) setLastInv(lastInvDate)
+
+    // 2. Reste des données depuis dateRef
+    const [
+      { data: si }, { data: mp }, { data: mpAll },
+      { data: pertes }, { data: receptions }, { data: conso }
+    ] = await Promise.all([
+      supabase.from('stock_items').select('*').eq('active',true).order('category').order('name'),
+      supabase.from('matiere_premiere').select('matiere,prix,quantite').eq('actif',true),
+      supabase.from('matiere_premiere').select('matiere,actif'),
+      supabase.from('stock_pertes').select('item_name,qte,matiere_ref').gt('date_perte', dateRef),
+      supabase.from('stock_movements').select('item_id,qty,stock_items(name,matiere_ref)').eq('type','reception').gt('created_at', dateRef+'T00:00:00'),
+      supabase.from('v_conso_theorique').select('matiere,qte_theo').gt('date_vente', dateRef).lte('date_vente', format(new Date(),'yyyy-MM-dd')),
+    ])
+
+    const mpMap={}
+    for (const m of (mp||[])) mpMap[norm(m.matiere)]={prixUnit:m.quantite>0?m.prix/m.quantite:0}
+    const pertesMap={}, recuMap={}, consoMap={}
+    for (const p of (pertes||[])) { const k=norm(p.matiere_ref||p.item_name); pertesMap[k]=(pertesMap[k]||0)+parseFloat(p.qte||0) }
+    for (const r of (receptions||[])) { const k=norm(r.stock_items?.matiere_ref||r.stock_items?.name||''); if(k) recuMap[k]=(recuMap[k]||0)+parseFloat(r.qty||0) }
+    for (const c of (conso||[])) { const k=norm(c.matiere); consoMap[k]=(consoMap[k]||0)+parseFloat(c.qte_theo||0) }
+
+    const inactiveMp = new Set((mpAll||[]).filter(m=>m.actif===false).map(m=>norm(m.matiere)))
+    const filtered = (si||[]).filter(item => item.matiere_ref && !inactiveMp.has(norm(item.matiere_ref)))
+
+    setItems(filtered.map(item=>{
       const k = norm(item.matiere_ref||item.name)
-      return !item.matiere_ref || activeMp.has(k) || true // garder tous mais calculer valeur 0 si inactif
-    })
-    setItems(filtered.map(item=>({
-      ...item,
-      prixUnit: mpMap[norm(item.matiere_ref||item.name)]||0,
-      valeur:   (item.current_qty||0)*(mpMap[norm(item.matiere_ref||item.name)]||0),
-      perdus:   pertesMap[item.name]||0,
-      alerte:   (item.current_qty||0) <= (item.min_qty||0),
-    })))
-    // Dernier inventaire
-    if (invLast?.[0]) setLastInv(invLast[0].date_inventaire)
+      const prixUnit = mpMap[k]?.prixUnit||0
+      const lastInvItem = lastInvByItem[item.name]
+      const stockDebut  = lastInvItem ? parseFloat(lastInvItem.qte_physique||0) : parseFloat(item.current_qty||0)
+      const recu        = recuMap[k]||0
+      const perdus      = pertesMap[k]||0
+      const consomme    = consoMap[k]||0
+      const stockTheo   = lastInvItem
+        ? Math.max(0, stockDebut + recu - consomme - perdus)
+        : parseFloat(item.current_qty||0)
+      return {
+        ...item,
+        prixUnit,
+        current_qty: stockTheo,
+        valeur: stockTheo * prixUnit,
+        perdus,
+        alerte: stockTheo <= (item.min_qty||0),
+        hasInv: !!lastInvItem,
+      }
+    }))
     setLoading(false)
   }
 
