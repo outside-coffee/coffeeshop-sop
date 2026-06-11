@@ -357,7 +357,9 @@ return (
                     {isReception?'+':'-'}{isReception?m.qty:m.qte} <span style={{fontSize:'0.65rem',fontWeight:400}}>{m._unit}</span>
                   </div>
                   {isReception&&m.prix>0&&<div style={{fontSize:'0.7rem',fontWeight:700,color:'var(--outside-green)'}}>{parseFloat(m.prix).toFixed(2)} DT</div>}
-                  <div style={{fontSize:'0.65rem',color:'var(--muted)'}}>{format(new Date(m._date),'d MMM',{locale:fr})}</div>
+                  <div style={{fontSize:'0.65rem',color:'var(--muted)'}}>
+                    {(() => { try { return format(new Date(m._date),'d MMM',{locale:fr}) } catch(e) { return '—' } })()}
+                  </div>
                 </div>
                 {isManager && (
                   <div style={{display:'flex',flexDirection:'column',gap:4,flexShrink:0,marginLeft:4}}>
