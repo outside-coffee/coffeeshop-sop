@@ -361,14 +361,7 @@ return (
                     {(() => { try { return format(new Date(m._date),'d MMM',{locale:fr}) } catch(e) { return '—' } })()}
                   </div>
                 </div>
-                {isManager && (
-                  <div style={{display:'flex',flexDirection:'column',gap:4,flexShrink:0,marginLeft:4}}>
-                    <button onClick={()=>{setEditItem(m);setModal(isReception?'edit_reception':'edit_perte')}}
-                      style={{width:28,height:28,border:'1.5px solid var(--outside-cream2)',borderRadius:'var(--radius-sm)',background:'white',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.75rem'}}>✏️</button>
-                    <button onClick={()=>isReception?deleteReception(m):deletePerte(m)}
-                      style={{width:28,height:28,border:'1.5px solid #FDEEEC',borderRadius:'var(--radius-sm)',background:'#FDEEEC',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.75rem'}}>🗑</button>
-                  </div>
-                )}
+
               </div>
             )
           })}
@@ -377,27 +370,52 @@ return (
 
       {modal==='reception' && <ReceptionModal items={items} formats={formats} fetchFormats={fetchFormats} onClose={()=>setModal(null)} onSave={saveReception} saving={saving}/>}
       {modal==='perte'     && <PerteModal items={items} onClose={()=>setModal(null)} onSave={savePerte} saving={saving}/>}
-      {modal==='edit_reception' && editItem && <EditReceptionModal mouvement={editItem} onClose={()=>{setModal(null);setEditItem(null)}} onSave={async(form)=>{
-        setSaving(true)
-        await supabase.from('stock_movements').update({qty:parseFloat(form.qty),prix:parseFloat(form.prix||0),fournisseur:form.fournisseur||null,note:form.note||null,created_at:form.date_reception+'T12:00:00'}).eq('id',editItem.id)
-        // Recalculer current_qty
-        const diff = parseFloat(form.qty) - parseFloat(editItem.qty)
-        if (diff !== 0) {
-          const si = items.find(i=>i.id===editItem.item_id)
-          if (si) await supabase.from('stock_items').update({current_qty:parseFloat(si.current_qty||0)+diff}).eq('id',si.id)
-        }
-        setSaving(false); setModal(null); setEditItem(null); loadData()
-      }} saving={saving}/>}
-      {modal==='edit_perte' && editItem && <EditPerteModal mouvement={editItem} onClose={()=>{setModal(null);setEditItem(null)}} onSave={async(form)=>{
-        setSaving(true)
-        await supabase.from('stock_pertes').update({qte:parseFloat(form.qte),motif:form.motif,motif_detail:form.motif_detail||null,date_perte:form.date_perte}).eq('id',editItem.id)
-        const diff = parseFloat(form.qte) - parseFloat(editItem.qte)
-        if (diff !== 0) {
-          const si = items.find(i=>i.name===editItem._name)
-          if (si) await supabase.from('stock_items').update({current_qty:Math.max(0,parseFloat(si.current_qty||0)-diff)}).eq('id',si.id)
-        }
-        setSaving(false); setModal(null); setEditItem(null); loadData()
-      }} saving={saving}/>}
+      {modal==='edit_reception' && editItem && (
+        <EditReceptionModal
+          mouvement={editItem}
+          onClose={()=>{ setModal(null); setEditItem(null) }}
+          saving={saving}
+          onSave={async(form)=>{
+            setSaving(true)
+            await supabase.from('stock_movements').update({
+              qty: parseFloat(form.qty),
+              prix: parseFloat(form.prix||0),
+              fournisseur: form.fournisseur||null,
+              note: form.note||null,
+              created_at: form.date_reception+'T12:00:00',
+            }).eq('id', editItem.id)
+            const diff = parseFloat(form.qty) - parseFloat(editItem.qty||0)
+            if (diff !== 0) {
+              const si = items.find(i => String(i.id) === String(editItem.item_id))
+              if (si) await supabase.from('stock_items').update({ current_qty: parseFloat(si.current_qty||0)+diff }).eq('id', si.id)
+            }
+            setSaving(false); setModal(null); setEditItem(null); loadData()
+          }}
+        />
+      )}
+      {modal==='edit_perte' && editItem && (
+        <EditPerteModal
+          mouvement={editItem}
+          onClose={()=>{ setModal(null); setEditItem(null) }}
+          saving={saving}
+          onSave={async(form)=>{
+            setSaving(true)
+            await supabase.from('stock_pertes').update({
+              qte: parseFloat(form.qte),
+              motif: form.motif,
+              motif_detail: form.motif_detail||null,
+              date_perte: form.date_perte,
+            }).eq('id', editItem.id)
+            const diff = parseFloat(form.qte||0) - parseFloat(editItem.qte||0)
+            if (diff !== 0) {
+              const si = items.find(i => i.name === editItem._name)
+              if (si) await supabase.from('stock_items').update({ current_qty: Math.max(0, parseFloat(si.current_qty||0)-diff) }).eq('id', si.id)
+            }
+            setSaving(false); setModal(null); setEditItem(null); loadData()
+          }}
+        />
+      )}
+
     </>
   )
 }
