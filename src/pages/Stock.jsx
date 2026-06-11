@@ -166,7 +166,7 @@ function TabDashboard() {
         <div style={{background:'#FDEEEC',border:'1.5px solid #F5C6C0',borderRadius:'var(--radius-lg)',padding:'0.75rem 1rem',marginBottom:'1rem'}}>
           <div style={{fontWeight:800,color:'var(--danger)',marginBottom:6,fontSize:'0.82rem'}}>⚠️ Stock bas</div>
           <div style={{display:'flex',flexWrap:'wrap',gap:4}}>
-            {alertes.map(a=><span key={a.id} style={{background:'white',border:'1.5px solid #F5C6C0',borderRadius:'var(--radius-pill)',padding:'2px 8px',fontSize:'0.72rem',fontWeight:700,color:'var(--danger)'}}>{a.name} ({a.current_qty} {a.unit})</span>)}
+            {alertes.map(a=><span key={a.id} style={{background:'white',border:'1.5px solid #F5C6C0',borderRadius:'var(--radius-pill)',padding:'2px 8px',fontSize:'0.72rem',fontWeight:700,color:'var(--danger)'}}>{a.name} ({parseFloat(a.current_qty||0).toFixed(0)} {a.unit})</span>)}
           </div>
         </div>
       )}
