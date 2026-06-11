@@ -362,6 +362,14 @@ return (
                   </div>
                 </div>
 
+                {isManager && (
+                  <div style={{display:'flex',flexDirection:'column',gap:4,flexShrink:0,marginLeft:4}}>
+                    <button onClick={()=>{ setEditItem({...m}); setModal(isReception?'edit_reception':'edit_perte') }}
+                      style={{width:28,height:28,border:'1.5px solid var(--outside-cream2)',borderRadius:'var(--radius-sm)',background:'white',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.75rem'}}>✏️</button>
+                    <button onClick={()=>isReception?deleteReception(m):deletePerte(m)}
+                      style={{width:28,height:28,border:'1.5px solid #FDEEEC',borderRadius:'var(--radius-sm)',background:'#FDEEEC',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'0.75rem'}}>🗑</button>
+                  </div>
+                )}
               </div>
             )
           })}
