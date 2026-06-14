@@ -533,7 +533,10 @@ function CompositionTab() {
       supabase.from('matiere_premiere').select('matiere, unite').order('matiere'),
     ])
     setItems(comp || [])
-    setMatieres(mp || [])
+    // Combiner matières premières + bases existantes (pour pouvoir composer avec une base)
+    const bases = [...new Set((comp||[]).filter(c=>c.type==='base').map(c=>c.nom_produit))]
+    const baseOptions = bases.map(b => ({ matiere: b, unite: 'portion', isBase: true }))
+    setMatieres([...(mp||[]), ...baseOptions])
     setLoading(false)
   }
 
@@ -688,10 +691,17 @@ function CompoModal({ line, matieres, onClose, onSave, saving }) {
             <option value="base">Base</option>
           </select>
         </div>
-        <div className="form-group"><label className="form-label">Matière</label>
+        <div className="form-group"><label className="form-label">Matière / Base</label>
           <select className="form-select" value={form.matiere} onChange={e => selectMatiere(e.target.value)}>
             <option value="">— Choisir —</option>
-            {matieres.map(m => <option key={m.matiere} value={m.matiere}>{m.matiere}</option>)}
+            <optgroup label="Matières premières">
+              {matieres.filter(m=>!m.isBase).map(m => <option key={m.matiere} value={m.matiere}>{m.matiere}</option>)}
+            </optgroup>
+            {matieres.some(m=>m.isBase) && (
+              <optgroup label="Bases">
+                {matieres.filter(m=>m.isBase).map(m => <option key={m.matiere} value={m.matiere}>{m.matiere}</option>)}
+              </optgroup>
+            )}
           </select>
         </div>
       </div>
