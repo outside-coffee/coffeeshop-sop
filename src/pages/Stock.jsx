@@ -275,7 +275,8 @@ function TabMouvements({ isManager, profile }) {
     if (factureFile) {
       const ext  = factureFile.name.split('.').pop()
       const path = `receptions/${item.id}_${Date.now()}.${ext}`
-      const { data } = await supabase.storage.from('factures').upload(path, factureFile)
+      const { data, error: uploadErr } = await supabase.storage.from('factures').upload(path, factureFile)
+      if (uploadErr) { alert('Erreur upload facture: '+uploadErr.message) }
       if (data) facture_url = data.path
     }
     const { error: mvtError } = await supabase.from('stock_movements').insert({item_id:item.id,qty:parseFloat(qty),type:'reception',note:note||null,fournisseur:fournisseur||null,facture_url,done_by:profile?.id,created_at:form.date_reception+'T12:00:00',prix:parseFloat(prix||0)})
@@ -445,7 +446,6 @@ function TabInventaire({ isManager, profile }) {
     : format(endOfMonth(periodeDate),'yyyy-MM-dd')
 
   useEffect(()=>{ load() },[periode])
-
   async function load() {
     setLoading(true)
     const prevPeriode = typeInv==='hebdo'
