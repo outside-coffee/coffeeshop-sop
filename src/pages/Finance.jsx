@@ -770,31 +770,46 @@ function TabCoutStock({ period }) {
         Coût réel = Stock début + Réceptions − Stock fin. Sans inventaire → réceptions uniquement.
       </div>
 
-      {/* TABLEAU PAR MATIÈRE */}
-      <div className="card">
-        <div style={{display:'grid',gridTemplateColumns:'1fr 40px 40px 40px 60px 60px',gap:4,padding:'0.5rem 1rem',background:'var(--outside-cream)',fontSize:'0.55rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)'}}>
-          <div>Matière</div>
-          <div style={{textAlign:'center'}}>Début</div>
-          <div style={{textAlign:'center'}}>Reçu</div>
-          <div style={{textAlign:'center'}}>Fin</div>
-          <div style={{textAlign:'right'}}>Val. Rec.</div>
-          <div style={{textAlign:'right'}}>Coût réel</div>
-        </div>
+      {/* TABLEAU PAR MATIÈRE — carte par ligne */}
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
         {data.lignes.map((l,i)=>(
-          <div key={l.nom} style={{display:'grid',gridTemplateColumns:'1fr 40px 40px 40px 60px 60px',gap:4,padding:'0.6rem 1rem',borderTop:'1px solid var(--outside-cream)',alignItems:'center'}}>
-            <div style={{fontWeight:700,fontSize:'0.75rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{l.nom}</div>
-            <div style={{textAlign:'center',fontSize:'0.7rem',color:'var(--muted)'}}>{l.stockDebut!==null?fN(l.stockDebut):'—'}</div>
-            <div style={{textAlign:'center',fontSize:'0.7rem',color:'var(--outside-green)',fontWeight:700}}>{l.recu>0?'+'+fN(l.recu):'—'}</div>
-            <div style={{textAlign:'center',fontSize:'0.7rem',color:'var(--muted)'}}>{l.stockFin!==null?fN(l.stockFin):'—'}</div>
-            <div style={{textAlign:'right',fontSize:'0.72rem',fontWeight:700,color:'var(--outside-green)'}}>{l.recuDTVal>0?fDT(l.recuDTVal):'—'}</div>
-            <div style={{textAlign:'right',fontSize:'0.75rem',fontWeight:800,color:l.hasInv?'var(--outside-dark)':'var(--muted)'}}>{fDT(l.coutReel)}</div>
+          <div key={l.nom} className="card" style={{padding:'0.75rem 1rem'}}>
+            {/* NOM + COÛT RÉEL */}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+              <div style={{fontWeight:700,fontSize:'0.88rem'}}>{l.nom}</div>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontWeight:800,fontSize:'0.88rem',color:l.hasInv?'var(--danger)':'var(--muted)'}}>{fDT(l.coutReel)}</div>
+                <div style={{fontSize:'0.6rem',color:'var(--muted)',fontWeight:600,textTransform:'uppercase'}}>Coût réel</div>
+              </div>
+            </div>
+            {/* DÉTAIL STOCK */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6}}>
+              <div style={{background:'var(--outside-cream)',borderRadius:'var(--radius-sm)',padding:'5px 8px',textAlign:'center'}}>
+                <div style={{fontSize:'0.78rem',fontWeight:700,color:'var(--outside-dark)'}}>{l.stockDebut!==null?fN(l.stockDebut):'—'}</div>
+                <div style={{fontSize:'0.6rem',color:'var(--muted)',fontWeight:600}}>Début</div>
+              </div>
+              <div style={{background:'#EAF3DE',borderRadius:'var(--radius-sm)',padding:'5px 8px',textAlign:'center'}}>
+                <div style={{fontSize:'0.78rem',fontWeight:700,color:'var(--outside-green)'}}>{l.recu>0?'+'+fN(l.recu):'—'}</div>
+                <div style={{fontSize:'0.6rem',color:'var(--muted)',fontWeight:600}}>Reçu · {l.recuDTVal>0?fDT(l.recuDTVal):'—'}</div>
+              </div>
+              <div style={{background:'var(--outside-cream)',borderRadius:'var(--radius-sm)',padding:'5px 8px',textAlign:'center'}}>
+                <div style={{fontSize:'0.78rem',fontWeight:700,color:'var(--outside-dark)'}}>{l.stockFin!==null?fN(l.stockFin):'—'}</div>
+                <div style={{fontSize:'0.6rem',color:'var(--muted)',fontWeight:600}}>Fin</div>
+              </div>
+            </div>
+            {!l.hasInv && <div style={{marginTop:6,fontSize:'0.65rem',color:'var(--muted)',fontStyle:'italic'}}>Sans inventaire — réceptions uniquement</div>}
           </div>
         ))}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 40px 40px 40px 60px 60px',gap:4,padding:'0.6rem 1rem',borderTop:'2px solid var(--outside-cream2)',background:'var(--outside-cream)'}}>
-          <div style={{fontWeight:800,fontSize:'0.78rem'}}>Total</div>
-          <div/><div/><div/>
-          <div style={{textAlign:'right',fontWeight:800,fontSize:'0.78rem',color:'var(--outside-green)'}}>{fDT(data.totalReceptions)}</div>
-          <div style={{textAlign:'right',fontWeight:800,fontSize:'0.78rem',color:'var(--danger)'}}>{fDT(data.totalCout)}</div>
+        {/* TOTAL */}
+        <div className="card" style={{padding:'0.75rem 1rem',background:'var(--outside-dark)'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+            <span style={{fontWeight:800,fontSize:'0.82rem',color:'white'}}>Total réceptions</span>
+            <span style={{fontWeight:800,fontSize:'0.88rem',color:'var(--outside-green)'}}>{fDT(data.totalReceptions)}</span>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span style={{fontWeight:800,fontSize:'0.82rem',color:'white'}}>Coût réel total</span>
+            <span style={{fontWeight:800,fontSize:'0.88rem',color:'#FF9B9B'}}>{fDT(data.totalCout)}</span>
+          </div>
         </div>
       </div>
     </div>
