@@ -96,11 +96,13 @@ export default function Finance() {
           <button className={`tab-btn${tab === 'resultat' ? ' active' : ''}`} onClick={() => setTab('resultat')}>Résultat</button>
           <button className={`tab-btn${tab === 'charges'  ? ' active' : ''}`} onClick={() => setTab('charges')}>Charges</button>
           <button className={`tab-btn${tab === 'salaires' ? ' active' : ''}`} onClick={() => setTab('salaires')}>Salaires</button>
+          <button className={`tab-btn${tab === 'stock'    ? ' active' : ''}`} onClick={() => setTab('stock')}>Stock</button>
         </div>
 
         {tab === 'resultat' && <TabResultat period={period} isAdmin={isAdmin} />}
         {tab === 'charges'  && <TabCharges  period={period} isManager={isManager} />}
         {tab === 'salaires' && <TabSalaires period={period} isAdmin={isAdmin} />}
+        {tab === 'stock'    && <TabCoutStock period={period} />}
       </div>
     </>
   )
@@ -642,5 +644,140 @@ function TabSalaires({ period, isAdmin }) {
         </Modal>
       )}
     </>
+  )
+}
+
+// ── TAB COÛT STOCK ────────────────────────────────────────────────────
+function TabCoutStock({ period }) {
+  const [data,    setData]    = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => { load() }, [period])
+
+  async function load() {
+    setLoading(true)
+    const dateFrom = period + '-01'
+    const dateTo   = format(endOfMonth(new Date(period + '-01')), 'yyyy-MM-dd')
+
+    const [
+      { data: receptions },
+      { data: invDebut },
+      { data: invFin },
+      { data: mp },
+      { data: si },
+    ] = await Promise.all([
+      supabase.from('stock_movements').select('item_id,qty,prix,stock_items(name,matiere_ref)')
+        .eq('type','reception').gte('created_at', dateFrom).lte('created_at', dateTo+'T23:59:59'),
+      supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire')
+        .lt('date_inventaire', dateFrom).order('date_inventaire',{ascending:false}).limit(2000),
+      supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire')
+        .gte('date_inventaire', dateFrom).lte('date_inventaire', dateTo).order('date_inventaire',{ascending:false}).limit(2000),
+      supabase.from('matiere_premiere').select('matiere,prix,quantite').eq('actif',true),
+      supabase.from('stock_items').select('id,name,matiere_ref').eq('active',true),
+    ])
+
+    // Prix unitaire par matière
+    const mpMap = {}
+    for (const m of (mp||[])) mpMap[m.matiere?.toLowerCase().trim()] = m.quantite>0 ? m.prix/m.quantite : 0
+
+    // Dernier inventaire début de période par article
+    const invDebutMap = {}
+    for (const inv of (invDebut||[])) if (!invDebutMap[inv.item_name]) invDebutMap[inv.item_name] = parseFloat(inv.qte_physique||0)
+
+    // Dernier inventaire fin de période par article
+    const invFinMap = {}
+    for (const inv of (invFin||[])) if (!invFinMap[inv.item_name]) invFinMap[inv.item_name] = parseFloat(inv.qte_physique||0)
+
+    // Réceptions par matière
+    const recuMap = {}, recuDT = {}
+    for (const r of (receptions||[])) {
+      const matRef = r.stock_items?.matiere_ref || r.stock_items?.name || ''
+      const k = matRef.toLowerCase().trim()
+      recuMap[k] = (recuMap[k]||0) + parseFloat(r.qty||0)
+      recuDT[k]  = (recuDT[k]||0)  + parseFloat(r.prix||0)
+    }
+
+    // Construire lignes par matière
+    const lignes = []
+    const matieresSeen = new Set([...Object.keys(recuMap), ...(si||[]).map(s=>s.matiere_ref?.toLowerCase().trim()).filter(Boolean)])
+
+    for (const k of matieresSeen) {
+      const siItem = (si||[]).find(s=>s.matiere_ref?.toLowerCase().trim()===k)
+      const nom = siItem?.matiere_ref || k
+      const prixUnit = mpMap[k] || 0
+      const stockDebut = invDebutMap[siItem?.name||''] ?? null
+      const stockFin   = invFinMap[siItem?.name||'']   ?? null
+      const recu = recuMap[k] || 0
+      const recuDTVal = recuDT[k] || (recu * prixUnit)
+
+      // Coût réel = stock début + réceptions − stock fin
+      const coutReel = stockDebut!==null && stockFin!==null
+        ? Math.max(0, (stockDebut + recu - stockFin)) * prixUnit
+        : recuDTVal // fallback: juste les réceptions
+
+      if (recu===0 && stockDebut===null && stockFin===null) continue
+
+      lignes.push({ nom, stockDebut, recu, stockFin, recuDTVal, coutReel, prixUnit, hasInv: stockDebut!==null&&stockFin!==null })
+    }
+
+    lignes.sort((a,b)=>b.coutReel-a.coutReel)
+
+    const totalReceptions = lignes.reduce((s,l)=>s+l.recuDTVal,0)
+    const totalCout       = lignes.reduce((s,l)=>s+l.coutReel,0)
+
+    setData({ lignes, totalReceptions, totalCout })
+    setLoading(false)
+  }
+
+  if (loading) return <div style={{display:'flex',justifyContent:'center',padding:'3rem'}}><Spinner size={24}/></div>
+  if (!data)   return null
+
+  const fDT = n => parseFloat(n||0).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' DT'
+  const fN  = n => parseFloat(n||0).toFixed(0)
+
+  return (
+    <div>
+      {/* KPIs */}
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:'1rem'}}>
+        <div className="card" style={{padding:'0.75rem'}}>
+          <div style={{fontFamily:'var(--font-display)',fontSize:'1rem',color:'var(--outside-green)'}}>{fDT(data.totalReceptions)}</div>
+          <div style={{fontSize:'0.6rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)',marginTop:2}}>Total réceptions</div>
+        </div>
+        <div className="card" style={{padding:'0.75rem'}}>
+          <div style={{fontFamily:'var(--font-display)',fontSize:'1rem',color:'var(--danger)'}}>{fDT(data.totalCout)}</div>
+          <div style={{fontSize:'0.6rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)',marginTop:2}}>Coût réel consommé</div>
+        </div>
+      </div>
+
+      {/* NOTE */}
+      <div style={{background:'var(--outside-cream)',borderRadius:'var(--radius-md)',padding:'8px 12px',fontSize:'0.72rem',color:'var(--muted)',marginBottom:'1rem'}}>
+        Coût réel = Stock début + Réceptions − Stock fin. Sans inventaire → réceptions uniquement.
+      </div>
+
+      {/* TABLEAU PAR MATIÈRE */}
+      <div className="card">
+        <div style={{display:'grid',gridTemplateColumns:'1fr 50px 50px 50px 65px',gap:4,padding:'0.5rem 1rem',background:'var(--outside-cream)',fontSize:'0.6rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)'}}>
+          <div>Matière</div>
+          <div style={{textAlign:'center'}}>Début</div>
+          <div style={{textAlign:'center'}}>Reçu</div>
+          <div style={{textAlign:'center'}}>Fin</div>
+          <div style={{textAlign:'right'}}>Coût (DT)</div>
+        </div>
+        {data.lignes.map((l,i)=>(
+          <div key={l.nom} style={{display:'grid',gridTemplateColumns:'1fr 50px 50px 50px 65px',gap:4,padding:'0.6rem 1rem',borderTop:'1px solid var(--outside-cream)',alignItems:'center'}}>
+            <div style={{fontWeight:700,fontSize:'0.78rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{l.nom}</div>
+            <div style={{textAlign:'center',fontSize:'0.72rem',color:'var(--muted)'}}>{l.stockDebut!==null?fN(l.stockDebut):'—'}</div>
+            <div style={{textAlign:'center',fontSize:'0.72rem',color:'var(--outside-green)',fontWeight:700}}>{l.recu>0?'+'+fN(l.recu):'—'}</div>
+            <div style={{textAlign:'center',fontSize:'0.72rem',color:'var(--muted)'}}>{l.stockFin!==null?fN(l.stockFin):'—'}</div>
+            <div style={{textAlign:'right',fontSize:'0.78rem',fontWeight:800,color:l.hasInv?'var(--outside-dark)':'var(--muted)'}}>{fDT(l.coutReel)}</div>
+          </div>
+        ))}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 50px 50px 50px 65px',gap:4,padding:'0.6rem 1rem',borderTop:'2px solid var(--outside-cream2)',background:'var(--outside-cream)'}}>
+          <div style={{fontWeight:800,fontSize:'0.78rem'}}>Total</div>
+          <div/><div/><div/>
+          <div style={{textAlign:'right',fontWeight:800,fontSize:'0.82rem',color:'var(--danger)'}}>{fDT(data.totalCout)}</div>
+        </div>
+      </div>
+    </div>
   )
 }
