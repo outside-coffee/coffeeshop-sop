@@ -89,7 +89,12 @@ function TabDashboard() {
     for (const c of (conso||[])) { const k=norm(c.matiere); consoMap[k]=(consoMap[k]||0)+parseFloat(c.qte_theo||0) }
 
     const inactiveMp = new Set((mpAll||[]).filter(m=>m.actif===false).map(m=>norm(m.matiere)))
-    const filtered = (si||[]).filter(item => item.matiere_ref && !inactiveMp.has(norm(item.matiere_ref)))
+    const EXCLUDE_CATS = ['Emballage','Nettoyage']
+    const filtered = (si||[]).filter(item => 
+      item.matiere_ref && 
+      !inactiveMp.has(norm(item.matiere_ref)) &&
+      !EXCLUDE_CATS.includes(item.category)
+    )
 
     setItems(filtered.map(item=>{
       const k = norm(item.matiere_ref||item.name)
