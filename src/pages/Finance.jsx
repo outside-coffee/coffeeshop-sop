@@ -684,9 +684,14 @@ function TabCoutStock({ period }) {
     const invDebutMap = {}
     for (const inv of (invDebut||[])) if (!invDebutMap[inv.item_name]) invDebutMap[inv.item_name] = parseFloat(inv.qte_physique||0)
 
-    // Dernier inventaire fin de période par article
+    // Dernier inventaire fin de période par article (le plus récent dans la période)
     const invFinMap = {}
-    for (const inv of (invFin||[])) if (!invFinMap[inv.item_name]) invFinMap[inv.item_name] = parseFloat(inv.qte_physique||0)
+    for (const inv of (invFin||[])) {
+      if (!invFinMap[inv.item_name] || inv.date_inventaire > invFinMap[inv.item_name+'_date']) {
+        invFinMap[inv.item_name] = parseFloat(inv.qte_physique||0)
+        invFinMap[inv.item_name+'_date'] = inv.date_inventaire
+      }
+    }
 
     // Réceptions par matière
     const recuMap = {}, recuDT = {}
@@ -711,13 +716,24 @@ function TabCoutStock({ period }) {
       const recuDTVal = recuDT[k] || (recu * prixUnit)
 
       // Coût réel = stock début + réceptions − stock fin
-      const coutReel = stockDebut!==null && stockFin!==null
-        ? Math.max(0, (stockDebut + recu - stockFin)) * prixUnit
-        : recuDTVal // fallback: juste les réceptions
+      // Coût réel = réceptions + stock début - stock fin
+      // Si pas de stock début → on utilise juste réceptions - variation stock fin
+      let coutReel = recuDTVal // fallback
+      let hasInv = false
+      if (stockFin !== null) {
+        hasInv = true
+        if (stockDebut !== null) {
+          // On a début et fin
+          coutReel = Math.max(0, stockDebut + recu - stockFin) * prixUnit
+        } else {
+          // On a seulement fin → réceptions - stock fin restant
+          coutReel = Math.max(0, recu - stockFin) * prixUnit
+        }
+      }
 
       if (recu===0 && stockDebut===null && stockFin===null) continue
 
-      lignes.push({ nom, stockDebut, recu, stockFin, recuDTVal, coutReel, prixUnit, hasInv: stockDebut!==null&&stockFin!==null })
+      lignes.push({ nom, stockDebut, recu, stockFin, recuDTVal, coutReel, prixUnit, hasInv })
     }
 
     lignes.sort((a,b)=>b.coutReel-a.coutReel)
