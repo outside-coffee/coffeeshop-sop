@@ -835,68 +835,78 @@ function PerteModal({items,onClose,onSave,saving}) {
 }
 
 // ── TAB CONSOMMABLES ──────────────────────────────────────────────────
-const CATS_CONSO = ['Emballage','Nettoyage','Fournitures','Autre']
-const UNITES_CONSO = ['unité','rouleau','litre','kg','sachet','carton','paire']
+// Utilise les mêmes tables que Stock (matiere_premiere, stock_items, stock_movements, stock_pertes)
+// Filtre sur les catégories non-alimentaires
+
+const CATS_CONSO = ['Emballage','Nettoyage']
 
 function TabConsommables({ isManager, profile }) {
-  const [articles, setArticles]   = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [modal, setModal]         = useState(null) // 'article'|'reception'|'inventaire'
-  const [selected, setSelected]   = useState(null)
-  const [saving, setSaving]       = useState(false)
-  const [filterCat, setFilterCat] = useState('all')
+  const [items,    setItems]    = useState([])
+  const [loading,  setLoading]  = useState(true)
+  const [modal,    setModal]    = useState(null)
+  const [saving,   setSaving]   = useState(false)
+  const [filterCat,setFilterCat]= useState('all')
+  const [formats,  setFormats]  = useState([])
 
   useEffect(()=>{ load() },[])
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from('consommables')
-      .select('*').order('categorie').order('nom')
-    setArticles(data||[])
+    const { data: si } = await supabase.from('stock_items').select('*')
+      .in('category', CATS_CONSO).eq('active',true).order('category').order('name')
+    const { data: mp } = await supabase.from('matiere_premiere').select('matiere,prix,quantite,unite,actif')
+      .in('categorie', CATS_CONSO)
+    const mpMap = {}
+    for (const m of (mp||[])) mpMap[m.matiere?.toLowerCase().trim()] = { prixUnit: m.quantite>0?m.prix/m.quantite:0, prix:m.prix, quantite:m.quantite }
+    setItems((si||[]).map(item => ({
+      ...item,
+      prixUnit: mpMap[item.matiere_ref?.toLowerCase().trim()]?.prixUnit || 0,
+      valeur: (item.current_qty||0) * (mpMap[item.matiere_ref?.toLowerCase().trim()]?.prixUnit||0),
+      alerte: item.min_qty && parseFloat(item.current_qty||0) <= parseFloat(item.min_qty||0),
+    })))
     setLoading(false)
   }
 
-  async function saveArticle(form) {
-    setSaving(true)
-    if (form.id) {
-      await supabase.from('consommables').update(form).eq('id', form.id)
-    } else {
-      await supabase.from('consommables').insert(form)
-    }
-    setSaving(false); setModal(null); setSelected(null); load()
+  async function fetchFormats(matRef) {
+    const { data } = await supabase.from('matiere_formats').select('*').eq('matiere', matRef).eq('actif', true)
+    setFormats(data||[])
   }
 
   async function saveReception(form) {
     setSaving(true)
-    const art = articles.find(a=>a.id===form.article_id)
-    await supabase.from('consommables_mouvements').insert({
-      article_id: form.article_id,
-      type: 'reception',
-      qty: parseFloat(form.qty),
-      prix: parseFloat(form.prix||0),
-      fournisseur: form.fournisseur||null,
-      note: form.note||null,
-      done_by: profile?.id,
-      created_at: form.date+'T12:00:00',
+    const { item, qty, prix, fournisseur, note, factureFile } = form
+    let facture_url = null
+    if (factureFile) {
+      const ext = factureFile.name.split('.').pop()
+      const path = `receptions/${item.id}_${Date.now()}.${ext}`
+      const { data, error: uploadErr } = await supabase.storage.from('factures').upload(path, factureFile)
+      if (uploadErr) alert('Erreur upload: '+uploadErr.message)
+      if (data) facture_url = data.path
+    }
+    await supabase.from('stock_movements').insert({
+      item_id: item.id, qty: parseFloat(qty), type: 'reception',
+      note: note||null, fournisseur: fournisseur||null, facture_url,
+      done_by: profile?.id, prix: parseFloat(prix||0),
+      created_at: form.date_reception+'T12:00:00',
     })
-    await supabase.from('consommables').update({ stock_actuel: parseFloat(art.stock_actuel||0)+parseFloat(form.qty) }).eq('id', form.article_id)
-    setSaving(false); setModal(null); setSelected(null); load()
+    await supabase.from('stock_items').update({ current_qty: parseFloat(item.current_qty||0)+parseFloat(qty) }).eq('id', item.id)
+    setSaving(false); setModal(null); load()
   }
 
-  async function saveInventaire(form) {
+  async function savePerte(form) {
     setSaving(true)
-    await supabase.from('consommables').update({ stock_actuel: parseFloat(form.qty), date_inventaire: form.date }).eq('id', form.article_id)
-    setSaving(false); setModal(null); setSelected(null); load()
+    const { item, qte, motif, motif_detail, date_perte } = form
+    await supabase.from('stock_pertes').insert({
+      item_name: item.name, matiere_ref: item.matiere_ref, qte: parseFloat(qte),
+      unite: item.unit, motif, motif_detail: motif_detail||null,
+      date_perte, done_by: profile?.id,
+    })
+    await supabase.from('stock_items').update({ current_qty: Math.max(0, parseFloat(item.current_qty||0)-parseFloat(qte)) }).eq('id', item.id)
+    setSaving(false); setModal(null); load()
   }
 
-  async function deleteArticle(a) {
-    if (!window.confirm('Supprimer '+a.nom+' ?')) return
-    await supabase.from('consommables').delete().eq('id', a.id)
-    load()
-  }
-
-  const filtered = articles.filter(a => filterCat==='all' || a.categorie===filterCat)
-  const alertes  = articles.filter(a => a.stock_min && parseFloat(a.stock_actuel||0) <= parseFloat(a.stock_min||0))
+  const filtered = items.filter(i => filterCat==='all' || i.category===filterCat)
+  const alertes  = items.filter(i => i.alerte)
 
   if (loading) return <div style={{display:'flex',justifyContent:'center',padding:'3rem'}}><Spinner size={24}/></div>
 
@@ -909,7 +919,7 @@ function TabConsommables({ isManager, profile }) {
           <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
             {alertes.map(a=>(
               <span key={a.id} style={{background:'white',border:'1.5px solid #F5C6C0',borderRadius:'var(--radius-pill)',padding:'2px 8px',fontSize:'0.72rem',fontWeight:700,color:'var(--danger)'}}>
-                {a.nom} ({parseFloat(a.stock_actuel||0).toFixed(0)} {a.unite})
+                {a.name} ({parseFloat(a.current_qty||0).toFixed(0)} {a.unit})
               </span>
             ))}
           </div>
@@ -920,15 +930,10 @@ function TabConsommables({ isManager, profile }) {
       <div style={{display:'flex',gap:8,marginBottom:'0.75rem',flexWrap:'wrap'}}>
         {isManager && (
           <>
-            <button className="btn btn-primary btn-sm" onClick={()=>{setSelected(null);setModal('article')}}>
-              <Plus size={13}/> Article
-            </button>
-            <button className="btn btn-outline btn-sm" style={{color:'var(--outside-green)',borderColor:'var(--outside-green)'}} onClick={()=>{setSelected(null);setModal('reception')}}>
-              <ShoppingCart size={13}/> Réception
-            </button>
-            <button className="btn btn-outline btn-sm" style={{color:'var(--outside-orange)',borderColor:'var(--outside-orange)'}} onClick={()=>{setSelected(null);setModal('inventaire')}}>
-              📋 Inventaire
-            </button>
+            <button className="btn btn-primary btn-sm" style={{background:'var(--outside-green)',border:'none'}}
+              onClick={()=>setModal('reception')}><ShoppingCart size={13}/> Réception</button>
+            <button className="btn btn-outline btn-sm" style={{color:'var(--danger)',borderColor:'var(--danger)'}}
+              onClick={()=>setModal('perte')}><TrendingDown size={13}/> Perte</button>
           </>
         )}
         <div style={{display:'flex',gap:4,marginLeft:'auto',flexWrap:'wrap'}}>
@@ -943,125 +948,40 @@ function TabConsommables({ isManager, profile }) {
       {/* LISTE */}
       <div className="card">
         {filtered.length===0 ? (
-          <div style={{padding:'2rem',textAlign:'center',color:'var(--muted)'}}>Aucun article. Cliquez sur + Article pour commencer.</div>
-        ) : filtered.map((a,idx)=>{
-          const bas = a.stock_min && parseFloat(a.stock_actuel||0) <= parseFloat(a.stock_min||0)
-          const pct = a.stock_ideal ? Math.min(100, parseFloat(a.stock_actuel||0)/parseFloat(a.stock_ideal)*100) : null
+          <div style={{padding:'2rem',textAlign:'center',color:'var(--muted)'}}>
+            Aucun article. Ajoutez des matières dans Catalogue avec une catégorie Emballage/Nettoyage/Fournitures.
+          </div>
+        ) : filtered.map((item,idx)=>{
+          const pct = item.ideal_qty ? Math.min(100, parseFloat(item.current_qty||0)/parseFloat(item.ideal_qty)*100) : null
           return (
-            <div key={a.id} style={{padding:'0.75rem 1rem',borderBottom:idx<filtered.length-1?'1px solid var(--outside-cream)':'none'}}>
+            <div key={item.id} style={{padding:'0.75rem 1rem',borderBottom:idx<filtered.length-1?'1px solid var(--outside-cream)':'none'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
                 <div>
-                  <div style={{fontWeight:700,fontSize:'0.88rem'}}>{a.nom}</div>
-                  <div style={{fontSize:'0.65rem',color:'var(--outside-orange)',fontWeight:700}}>{a.categorie}</div>
+                  <div style={{fontWeight:700,fontSize:'0.88rem'}}>{item.name}</div>
+                  <div style={{fontSize:'0.65rem',color:'var(--outside-orange)',fontWeight:700}}>{item.category}</div>
                 </div>
                 <div style={{textAlign:'right'}}>
-                  <div style={{fontWeight:800,fontSize:'0.9rem',color:bas?'var(--danger)':'var(--outside-dark)'}}>
-                    {parseFloat(a.stock_actuel||0).toFixed(0)} <span style={{fontSize:'0.65rem',fontWeight:400}}>{a.unite}</span>
+                  <div style={{fontWeight:800,fontSize:'0.9rem',color:item.alerte?'var(--danger)':'var(--outside-dark)'}}>
+                    {parseFloat(item.current_qty||0).toFixed(0)} <span style={{fontSize:'0.65rem',fontWeight:400}}>{item.unit}</span>
                   </div>
-                  {a.prix_unitaire>0 && <div style={{fontSize:'0.65rem',color:'var(--muted)'}}>{(parseFloat(a.stock_actuel||0)*parseFloat(a.prix_unitaire||0)).toFixed(2)} DT</div>}
+                  {item.valeur>0 && <div style={{fontSize:'0.65rem',color:'var(--muted)'}}>{item.valeur.toFixed(2)} DT</div>}
                 </div>
               </div>
               {pct!==null && (
-                <div style={{height:4,background:'var(--outside-cream)',borderRadius:2,marginBottom:4,overflow:'hidden'}}>
-                  <div style={{width:pct+'%',height:'100%',background:bas?'var(--danger)':pct>60?'var(--outside-green)':'var(--outside-amber)',borderRadius:2,transition:'width 0.3s'}}/>
+                <div style={{height:4,background:'var(--outside-cream)',borderRadius:2,overflow:'hidden',marginBottom:4}}>
+                  <div style={{width:pct+'%',height:'100%',background:item.alerte?'var(--danger)':pct>60?'var(--outside-green)':'var(--outside-amber)',borderRadius:2}}/>
                 </div>
               )}
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <div style={{fontSize:'0.65rem',color:'var(--muted)'}}>
-                  {a.stock_min>0&&`min ${a.stock_min}`}{a.stock_ideal>0&&` · idéal ${a.stock_ideal}`} {a.unite}
-                </div>
-                {isManager && (
-                  <div style={{display:'flex',gap:4}}>
-                    <button onClick={()=>{setSelected(a);setModal('article')}} style={{width:26,height:26,border:'1.5px solid var(--outside-cream2)',borderRadius:'var(--radius-sm)',background:'white',cursor:'pointer',fontSize:'0.7rem',display:'flex',alignItems:'center',justifyContent:'center'}}>✏️</button>
-                    <button onClick={()=>deleteArticle(a)} style={{width:26,height:26,border:'1.5px solid #FDEEEC',borderRadius:'var(--radius-sm)',background:'#FDEEEC',cursor:'pointer',fontSize:'0.7rem',display:'flex',alignItems:'center',justifyContent:'center'}}>🗑</button>
-                  </div>
-                )}
+              <div style={{fontSize:'0.65rem',color:'var(--muted)'}}>
+                {item.min_qty>0&&`min ${item.min_qty}`}{item.ideal_qty>0&&` · idéal ${item.ideal_qty}`} {item.unit}
               </div>
             </div>
           )
         })}
       </div>
 
-      {/* MODALS */}
-      {modal==='article' && (
-        <ArticleConsoModal article={selected} onClose={()=>{setModal(null);setSelected(null)}} onSave={saveArticle} saving={saving}/>
-      )}
-      {modal==='reception' && (
-        <ReceptionConsoModal articles={articles} onClose={()=>{setModal(null);setSelected(null)}} onSave={saveReception} saving={saving}/>
-      )}
-      {modal==='inventaire' && (
-        <InventaireConsoModal articles={articles} onClose={()=>{setModal(null);setSelected(null)}} onSave={saveInventaire} saving={saving}/>
-      )}
+      {modal==='reception' && <ReceptionModal items={items} formats={formats} fetchFormats={fetchFormats} onClose={()=>setModal(null)} onSave={saveReception} saving={saving}/>}
+      {modal==='perte'     && <PerteModal     items={items} onClose={()=>setModal(null)} onSave={savePerte} saving={saving}/>}
     </div>
-  )
-}
-
-function ArticleConsoModal({article,onClose,onSave,saving}) {
-  const [form,setForm]=useState({id:article?.id,nom:article?.nom||'',categorie:article?.categorie||'Emballage',unite:article?.unite||'unité',stock_actuel:article?.stock_actuel||0,stock_min:article?.stock_min||'',stock_ideal:article?.stock_ideal||'',prix_unitaire:article?.prix_unitaire||''})
-  const set=(k,v)=>setForm(p=>({...p,[k]:v}))
-  return (
-    <Modal open onClose={onClose} title={article?'Modifier article':'Nouvel article'}
-      footer={<><button className="btn btn-outline" onClick={onClose}>Annuler</button><button className="btn btn-primary" disabled={!form.nom||saving} onClick={()=>onSave(form)}>{saving?<Spinner size={16}/>:<Save size={15}/>} Enregistrer</button></>}>
-      <div className="form-group"><label className="form-label">Nom</label><input className="form-input" value={form.nom} onChange={e=>set('nom',e.target.value)} placeholder="Ex: Gobelets 8oz"/></div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem'}}>
-        <div className="form-group"><label className="form-label">Catégorie</label>
-          <select className="form-select" value={form.categorie} onChange={e=>set('categorie',e.target.value)}>
-            {CATS_CONSO.map(c=><option key={c} value={c}>{c}</option>)}
-          </select>
-        </div>
-        <div className="form-group"><label className="form-label">Unité</label>
-          <select className="form-select" value={form.unite} onChange={e=>set('unite',e.target.value)}>
-            {UNITES_CONSO.map(u=><option key={u} value={u}>{u}</option>)}
-          </select>
-        </div>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'0.75rem'}}>
-        <div className="form-group"><label className="form-label">Stock min</label><input className="form-input" type="number" value={form.stock_min} onChange={e=>set('stock_min',e.target.value)}/></div>
-        <div className="form-group"><label className="form-label">Stock idéal</label><input className="form-input" type="number" value={form.stock_ideal} onChange={e=>set('stock_ideal',e.target.value)}/></div>
-        <div className="form-group"><label className="form-label">Prix/unité (DT)</label><input className="form-input" type="number" step="0.01" value={form.prix_unitaire} onChange={e=>set('prix_unitaire',e.target.value)}/></div>
-      </div>
-    </Modal>
-  )
-}
-
-function ReceptionConsoModal({articles,onClose,onSave,saving}) {
-  const [form,setForm]=useState({article_id:'',qty:'',prix:'',fournisseur:'',note:'',date:format(new Date(),'yyyy-MM-dd')})
-  const set=(k,v)=>setForm(p=>({...p,[k]:v}))
-  const art = articles.find(a=>a.id===form.article_id)
-  return (
-    <Modal open onClose={onClose} title="Réception consommable"
-      footer={<><button className="btn btn-outline" onClick={onClose}>Annuler</button><button className="btn btn-primary" disabled={!form.article_id||!form.qty||saving} onClick={()=>onSave(form)}>{saving?<Spinner size={16}/>:<ShoppingCart size={15}/>} Enregistrer</button></>}>
-      <div className="form-group"><label className="form-label">Article</label>
-        <select className="form-select" value={form.article_id} onChange={e=>set('article_id',e.target.value)}>
-          <option value="">— Choisir —</option>
-          {articles.map(a=><option key={a.id} value={a.id}>{a.nom} ({a.categorie})</option>)}
-        </select>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem'}}>
-        <div className="form-group"><label className="form-label">Quantité {art?.unite?`(${art.unite})`:''}</label><input className="form-input" type="number" value={form.qty} onChange={e=>set('qty',e.target.value)}/></div>
-        <div className="form-group"><label className="form-label">Prix total (DT)</label><input className="form-input" type="number" step="0.01" value={form.prix} onChange={e=>set('prix',e.target.value)}/></div>
-      </div>
-      <div className="form-group"><label className="form-label">Date</label><input className="form-input" type="date" value={form.date} onChange={e=>set('date',e.target.value)}/></div>
-      <div className="form-group"><label className="form-label">Fournisseur</label><input className="form-input" value={form.fournisseur} onChange={e=>set('fournisseur',e.target.value)}/></div>
-    </Modal>
-  )
-}
-
-function InventaireConsoModal({articles,onClose,onSave,saving}) {
-  const [form,setForm]=useState({article_id:'',qty:'',date:format(new Date(),'yyyy-MM-dd')})
-  const set=(k,v)=>setForm(p=>({...p,[k]:v}))
-  const art = articles.find(a=>a.id===form.article_id)
-  return (
-    <Modal open onClose={onClose} title="Inventaire consommable"
-      footer={<><button className="btn btn-outline" onClick={onClose}>Annuler</button><button className="btn btn-primary" disabled={!form.article_id||form.qty===''||saving} onClick={()=>onSave(form)}>{saving?<Spinner size={16}/>:'✓'} Enregistrer</button></>}>
-      <div className="form-group"><label className="form-label">Article</label>
-        <select className="form-select" value={form.article_id} onChange={e=>set('article_id',e.target.value)}>
-          <option value="">— Choisir —</option>
-          {articles.map(a=><option key={a.id} value={a.id}>{a.nom} ({a.stock_actuel||0} {a.unite} actuellement)</option>)}
-        </select>
-      </div>
-      <div className="form-group"><label className="form-label">Stock compté {art?.unite?`(${art.unite})`:''}</label><input className="form-input" type="number" value={form.qty} onChange={e=>set('qty',e.target.value)}/></div>
-      <div className="form-group"><label className="form-label">Date</label><input className="form-input" type="date" value={form.date} onChange={e=>set('date',e.target.value)}/></div>
-    </Modal>
   )
 }
