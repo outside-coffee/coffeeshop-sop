@@ -32,7 +32,7 @@ export default function Stock() {
           <button className={`tab-btn${tab==='dashboard' ?' active':''}`} onClick={()=>setTab('dashboard')}>Vue d'ensemble</button>
           <button className={`tab-btn${tab==='mouvements'?' active':''}`} onClick={()=>setTab('mouvements')}>Mouvements</button>
           <button className={`tab-btn${tab==='inventaire'   ?' active':''}`} onClick={()=>setTab('inventaire')}>Inventaire</button>
-          <button className={`tab-btn${tab==='consommables'?' active':''}`} onClick={()=>setTab('consommables')}>Consommables</button>
+          <button className={`tab-btn${tab==='consommables'?' active':''}`} onClick={()=>setTab('consommables')}>🧴 Conso.</button>
         </div>
         {tab==='dashboard'  && <TabDashboard />}
         {tab==='mouvements'   && <TabMouvements   isManager={isManager} profile={profile} />}
