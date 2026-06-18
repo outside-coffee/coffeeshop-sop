@@ -29,7 +29,7 @@ export default function Stock() {
       <div className="page-header"><h1 className="page-title">Stock</h1></div>
       <div className="page-content">
         <div className="tabs" style={{marginBottom:'1.25rem'}}>
-          <button className={`tab-btn${tab==='dashboard' ?' active':''}`} onClick={()=>setTab('dashboard')}>Vue d'ensemble</button>
+          <button className={`tab-btn${tab==='dashboard' ?' active':''}`} onClick={()=>setTab('dashboard')}>Stock</button>
           <button className={`tab-btn${tab==='mouvements'?' active':''}`} onClick={()=>setTab('mouvements')}>Mouvements</button>
           <button className={`tab-btn${tab==='inventaire'   ?' active':''}`} onClick={()=>setTab('inventaire')}>Inventaire</button>
           <button className={`tab-btn${tab==='consommables'?' active':''}`} onClick={()=>setTab('consommables')}>🧴 Conso.</button>
