@@ -786,14 +786,17 @@ function TabCoutStock({ period }) {
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6}}>
               <div style={{background:'var(--outside-cream)',borderRadius:'var(--radius-sm)',padding:'5px 8px',textAlign:'center'}}>
                 <div style={{fontSize:'0.78rem',fontWeight:700,color:'var(--outside-dark)'}}>{l.stockDebut!==null?fN(l.stockDebut):'—'}</div>
+                <div style={{fontSize:'0.62rem',color:'var(--outside-green)',fontWeight:600}}>{l.stockDebut!==null&&l.prixUnit>0?fDT(l.stockDebut*l.prixUnit):'—'}</div>
                 <div style={{fontSize:'0.6rem',color:'var(--muted)',fontWeight:600}}>Début</div>
               </div>
               <div style={{background:'#EAF3DE',borderRadius:'var(--radius-sm)',padding:'5px 8px',textAlign:'center'}}>
                 <div style={{fontSize:'0.78rem',fontWeight:700,color:'var(--outside-green)'}}>{l.recu>0?'+'+fN(l.recu):'—'}</div>
-                <div style={{fontSize:'0.6rem',color:'var(--muted)',fontWeight:600}}>Reçu · {l.recuDTVal>0?fDT(l.recuDTVal):'—'}</div>
+                <div style={{fontSize:'0.62rem',color:'var(--outside-green)',fontWeight:600}}>{l.recuDTVal>0?fDT(l.recuDTVal):'—'}</div>
+                <div style={{fontSize:'0.6rem',color:'var(--muted)',fontWeight:600}}>Reçu</div>
               </div>
               <div style={{background:'var(--outside-cream)',borderRadius:'var(--radius-sm)',padding:'5px 8px',textAlign:'center'}}>
                 <div style={{fontSize:'0.78rem',fontWeight:700,color:'var(--outside-dark)'}}>{l.stockFin!==null?fN(l.stockFin):'—'}</div>
+                <div style={{fontSize:'0.62rem',color:'var(--outside-green)',fontWeight:600}}>{l.stockFin!==null&&l.prixUnit>0?fDT(l.stockFin*l.prixUnit):'—'}</div>
                 <div style={{fontSize:'0.6rem',color:'var(--muted)',fontWeight:600}}>Fin</div>
               </div>
             </div>
