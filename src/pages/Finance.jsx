@@ -772,26 +772,29 @@ function TabCoutStock({ period }) {
 
       {/* TABLEAU PAR MATIÈRE */}
       <div className="card">
-        <div style={{display:'grid',gridTemplateColumns:'1fr 50px 50px 50px 65px',gap:4,padding:'0.5rem 1rem',background:'var(--outside-cream)',fontSize:'0.6rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)'}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 40px 40px 40px 60px 60px',gap:4,padding:'0.5rem 1rem',background:'var(--outside-cream)',fontSize:'0.55rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)'}}>
           <div>Matière</div>
           <div style={{textAlign:'center'}}>Début</div>
           <div style={{textAlign:'center'}}>Reçu</div>
           <div style={{textAlign:'center'}}>Fin</div>
-          <div style={{textAlign:'right'}}>Coût (DT)</div>
+          <div style={{textAlign:'right'}}>Val. Rec.</div>
+          <div style={{textAlign:'right'}}>Coût réel</div>
         </div>
         {data.lignes.map((l,i)=>(
-          <div key={l.nom} style={{display:'grid',gridTemplateColumns:'1fr 50px 50px 50px 65px',gap:4,padding:'0.6rem 1rem',borderTop:'1px solid var(--outside-cream)',alignItems:'center'}}>
-            <div style={{fontWeight:700,fontSize:'0.78rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{l.nom}</div>
-            <div style={{textAlign:'center',fontSize:'0.72rem',color:'var(--muted)'}}>{l.stockDebut!==null?fN(l.stockDebut):'—'}</div>
-            <div style={{textAlign:'center',fontSize:'0.72rem',color:'var(--outside-green)',fontWeight:700}}>{l.recu>0?'+'+fN(l.recu):'—'}</div>
-            <div style={{textAlign:'center',fontSize:'0.72rem',color:'var(--muted)'}}>{l.stockFin!==null?fN(l.stockFin):'—'}</div>
-            <div style={{textAlign:'right',fontSize:'0.78rem',fontWeight:800,color:l.hasInv?'var(--outside-dark)':'var(--muted)'}}>{fDT(l.coutReel)}</div>
+          <div key={l.nom} style={{display:'grid',gridTemplateColumns:'1fr 40px 40px 40px 60px 60px',gap:4,padding:'0.6rem 1rem',borderTop:'1px solid var(--outside-cream)',alignItems:'center'}}>
+            <div style={{fontWeight:700,fontSize:'0.75rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{l.nom}</div>
+            <div style={{textAlign:'center',fontSize:'0.7rem',color:'var(--muted)'}}>{l.stockDebut!==null?fN(l.stockDebut):'—'}</div>
+            <div style={{textAlign:'center',fontSize:'0.7rem',color:'var(--outside-green)',fontWeight:700}}>{l.recu>0?'+'+fN(l.recu):'—'}</div>
+            <div style={{textAlign:'center',fontSize:'0.7rem',color:'var(--muted)'}}>{l.stockFin!==null?fN(l.stockFin):'—'}</div>
+            <div style={{textAlign:'right',fontSize:'0.72rem',fontWeight:700,color:'var(--outside-green)'}}>{l.recuDTVal>0?fDT(l.recuDTVal):'—'}</div>
+            <div style={{textAlign:'right',fontSize:'0.75rem',fontWeight:800,color:l.hasInv?'var(--outside-dark)':'var(--muted)'}}>{fDT(l.coutReel)}</div>
           </div>
         ))}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 50px 50px 50px 65px',gap:4,padding:'0.6rem 1rem',borderTop:'2px solid var(--outside-cream2)',background:'var(--outside-cream)'}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 40px 40px 40px 60px 60px',gap:4,padding:'0.6rem 1rem',borderTop:'2px solid var(--outside-cream2)',background:'var(--outside-cream)'}}>
           <div style={{fontWeight:800,fontSize:'0.78rem'}}>Total</div>
           <div/><div/><div/>
-          <div style={{textAlign:'right',fontWeight:800,fontSize:'0.82rem',color:'var(--danger)'}}>{fDT(data.totalCout)}</div>
+          <div style={{textAlign:'right',fontWeight:800,fontSize:'0.78rem',color:'var(--outside-green)'}}>{fDT(data.totalReceptions)}</div>
+          <div style={{textAlign:'right',fontWeight:800,fontSize:'0.78rem',color:'var(--danger)'}}>{fDT(data.totalCout)}</div>
         </div>
       </div>
     </div>
