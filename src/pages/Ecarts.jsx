@@ -32,7 +32,7 @@ export default function Ecarts() {
   useEffect(()=>{ charger() },[])
 
   async function charger() {
-    setLoading(true); setExpanded(null)
+    setLoading(true); setExpanded(null); setConsoDetail({})
 
     const [
       {data:consoData}, {data:mp}, {data:bases},
