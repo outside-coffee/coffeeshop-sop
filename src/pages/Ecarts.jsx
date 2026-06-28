@@ -90,7 +90,13 @@ export default function Ecarts() {
 
       // Écart = stock physique − stock théorique fin
       const ecart      = stockFin!==null ? stockFin - stockTheoFin : null
-      const ecartPct   = stockTheoFin>0 && ecart!==null ? ((ecart/stockTheoFin)*100).toFixed(1) : null
+      // Conso réelle = stock début + réceptions − stock fin physique
+      const debutVal = stockDebut??0
+      const consoReelle = stockFin!==null ? Math.max(0, debutVal + recu - stockFin) : null
+      // Écart % = (conso réelle − conso théo) / conso théo × 100
+      const ecartPct = consoTheo>0 && consoReelle!==null
+        ? (((consoReelle - consoTheo) / consoTheo) * 100).toFixed(1)
+        : null
       const prixUnit   = info.prixUnit||0
       const coutTheo   = consoTheoMap[k].cout||consoTheo*prixUnit
       const coutEcart  = ecart!==null ? ecart*prixUnit : null
