@@ -279,15 +279,9 @@ export default function Objectifs() {
                     </div>
                     <div style={{fontSize:'0.72rem',color:'var(--muted)'}}>objectif &lt; {objEcart?.valeur_cible||5}%</div>
                   </div>
-                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,fontSize:'0.75rem'}}>
-                    <div style={{background:'var(--outside-cream)',borderRadius:'var(--radius-sm)',padding:'6px 10px'}}>
-                      <div style={{fontWeight:700}}>{ecartMoyen.totalCoutTheo.toFixed(2)} DT</div>
-                      <div style={{color:'var(--muted)',fontSize:'0.65rem'}}>Coût théorique</div>
-                    </div>
-                    <div style={{background:'#FCEBEB',borderRadius:'var(--radius-sm)',padding:'6px 10px'}}>
-                      <div style={{fontWeight:700,color:'var(--danger)'}}>{ecartMoyen.totalCoutEcart.toFixed(2)} DT</div>
-                      <div style={{color:'var(--muted)',fontSize:'0.65rem'}}>Écart en valeur</div>
-                    </div>
+                  <div style={{background:'#FCEBEB',borderRadius:'var(--radius-sm)',padding:'6px 10px'}}>
+                    <div style={{fontWeight:700,color:'var(--danger)',fontSize:'0.82rem'}}>{ecartMoyen.totalCoutEcart.toFixed(2)} DT</div>
+                    <div style={{color:'var(--muted)',fontSize:'0.65rem'}}>Écart en valeur</div>
                   </div>
                 </>
               ) : (
