@@ -8,6 +8,7 @@ import { Plus, Save, Target, CheckCircle2, XCircle, Star, Trash2 } from 'lucide-
 
 const norm = s => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim()||''
 const fN  = (n,d=1) => n==null ? '—' : parseFloat(n).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d})
+const DATE_CHG_TABLE = new Date('2026-03-19')
 
 export default function Objectifs() {
   const { profile } = useAuth()
@@ -55,7 +56,7 @@ export default function Objectifs() {
       supabase.from('v_conso_theorique').select('matiere,qte_theo,cout_theo').gte('date_vente',dateFrom).lte('date_vente',dateTo),
       supabase.from('matiere_premiere').select('matiere,prix,quantite,actif'),
       supabase.from('controles_fiches').select('*').gte('date_controle',dateFrom).lte('date_controle',dateTo).order('date_controle',{ascending:false}),
-      supabase.from('transaction_line').select('produit,qte,date_vente').gte('date_vente',dateFrom).lte('date_vente',dateTo),
+      supabase.from('transaction_line').select('produit,qte,date_vente,numtable').gte('date_vente',dateFrom).lte('date_vente',dateTo),
       supabase.from('produits').select('nom_produit,famille'),
       supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire').gte('date_inventaire',dateFrom).lte('date_inventaire',dateTo).order('date_inventaire',{ascending:false}),
       supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire').lt('date_inventaire',dateFrom).order('date_inventaire',{ascending:false}),
@@ -131,19 +132,25 @@ export default function Objectifs() {
       pct: (totalCoutEcart/totalCoutTheo*100),
     } : null)
 
-    // Ventes Eau
+    // Ventes Eau (exclut conso perso)
     const eauNames = new Set(['eau 0.5','eau 1/2'])
     let eauCount = 0
     for (const v of (ventesData||[])) {
+      const dateVente = new Date(v.date_vente)
+      const isConsoPerso = v.numtable === 32 || (v.numtable === 22 && dateVente < DATE_CHG_TABLE)
+      if (isConsoPerso) continue
       if (eauNames.has(norm(v.produit))) eauCount += parseFloat(v.qte||0)
     }
     setVentesEau(eauCount)
 
-    // Ventes Cookies (famille COOKIESIDE + tout produit contenant "COOKIE")
+    // Ventes Cookies (famille COOKIESIDE + tout produit contenant "COOKIE", exclut conso perso)
     const familleMap = {}
     for (const p of (produitsData||[])) familleMap[norm(p.nom_produit)] = p.famille
     let cookieCount = 0
     for (const v of (ventesData||[])) {
+      const dateVente = new Date(v.date_vente)
+      const isConsoPerso = v.numtable === 32 || (v.numtable === 22 && dateVente < DATE_CHG_TABLE)
+      if (isConsoPerso) continue
       const fam = familleMap[norm(v.produit)]
       const isCookie = fam === 'COOKIESIDE' || norm(v.produit).includes('cookie')
       if (isCookie) cookieCount += parseFloat(v.qte||0)
