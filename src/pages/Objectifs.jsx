@@ -4,7 +4,7 @@ import { useAuth, hasRole } from '../hooks/useAuth'
 import { Spinner, Modal } from '../components/UI'
 import { format, startOfMonth, endOfMonth, subMonths, differenceInCalendarDays } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { Plus, Save, Target, CheckCircle2, XCircle, Star } from 'lucide-react'
+import { Plus, Save, Target, CheckCircle2, XCircle, Star, Trash2 } from 'lucide-react'
 
 const norm = s => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim()||''
 const fN  = (n,d=1) => n==null ? '—' : parseFloat(n).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d})
@@ -21,6 +21,7 @@ export default function Objectifs() {
   const [ventesEau, setVentesEau] = useState(0)
   const [ventesCookies, setVentesCookies] = useState(0)
   const [avisGoogle, setAvisGoogle] = useState(null)
+  const [customObjectifs, setCustomObjectifs] = useState([])
   const [nbJours, setNbJours] = useState(1)
   const [modal, setModal] = useState(null) // 'objectif' | 'controle'
   const [editObj, setEditObj] = useState(null)
@@ -37,6 +38,7 @@ export default function Objectifs() {
 
     const [
       { data: objs },
+      { data: customObjs },
       { data: consoData },
       { data: mp },
       { data: ctrl },
@@ -49,6 +51,7 @@ export default function Objectifs() {
       { data: avisData },
     ] = await Promise.all([
       supabase.from('objectifs').select('*').eq('actif',true).order('type'),
+      supabase.from('objectifs').select('*').eq('is_custom',true).eq('periode',period).order('created_at'),
       supabase.from('v_conso_theorique').select('matiere,qte_theo,cout_theo').gte('date_vente',dateFrom).lte('date_vente',dateTo),
       supabase.from('matiere_premiere').select('matiere,prix,quantite,actif'),
       supabase.from('controles_fiches').select('*').gte('date_controle',dateFrom).lte('date_controle',dateTo).order('date_controle',{ascending:false}),
@@ -62,6 +65,7 @@ export default function Objectifs() {
     ])
 
     setObjectifs(objs||[])
+    setCustomObjectifs(customObjs||[])
     setControles(ctrl||[])
 
     // ── ÉCART GLOBAL EN VALEUR DE STOCK (DT) ──
@@ -180,6 +184,33 @@ export default function Objectifs() {
       await supabase.from('avis_google').insert(payload)
     }
     setSaving(false); setModal(null); load()
+  }
+
+  async function saveCustomObjectif(form) {
+    setSaving(true)
+    if (form.id) {
+      await supabase.from('objectifs').update({
+        label: form.label, valeur_cible: parseFloat(form.valeur_cible), unite: form.unite,
+      }).eq('id', form.id)
+    } else {
+      await supabase.from('objectifs').insert({
+        type: 'custom', cle: 'custom_'+Date.now(), label: form.label,
+        valeur_cible: parseFloat(form.valeur_cible), unite: form.unite,
+        is_custom: true, periode: period, valeur_actuelle: 0,
+      })
+    }
+    setSaving(false); setModal(null); setEditObj(null); load()
+  }
+
+  async function updateCustomValeur(obj, valeur) {
+    await supabase.from('objectifs').update({ valeur_actuelle: parseFloat(valeur||0) }).eq('id', obj.id)
+    load()
+  }
+
+  async function deleteCustomObjectif(obj) {
+    if (!window.confirm('Supprimer cet objectif ?')) return
+    await supabase.from('objectifs').delete().eq('id', obj.id)
+    load()
   }
 
   const objEau = objectifs.find(o=>o.type==='vente_addition'&&o.cle==='eau')
@@ -343,6 +374,50 @@ export default function Objectifs() {
                 <div style={{fontSize:'0.75rem',color:'var(--muted)',fontStyle:'italic'}}>Aucune saisie pour ce mois.</div>
               )}
             </div>
+
+            {/* 5. OBJECTIFS PERSONNALISÉS */}
+            <div style={{marginTop:'1rem'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+                <div style={{fontWeight:800,fontSize:'0.85rem'}}>🎯 Objectifs personnalisés</div>
+                {isManager && <button onClick={()=>{setEditObj(null);setModal('custom_objectif')}} className="btn btn-primary btn-sm"><Plus size={12}/> Ajouter</button>}
+              </div>
+              {customObjectifs.length===0 ? (
+                <div className="card" style={{padding:'1rem',fontSize:'0.75rem',color:'var(--muted)',fontStyle:'italic'}}>Aucun objectif personnalisé ce mois.</div>
+              ) : (
+                <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                  {customObjectifs.map(obj=>{
+                    const pct = obj.valeur_cible>0 ? Math.min(100, (obj.valeur_actuelle||0)/obj.valeur_cible*100) : 0
+                    const ok = (obj.valeur_actuelle||0) >= obj.valeur_cible
+                    return (
+                      <div key={obj.id} className="card" style={{padding:'0.75rem 1rem'}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                          <div style={{fontWeight:700,fontSize:'0.82rem'}}>{obj.label}</div>
+                          {isManager && (
+                            <div style={{display:'flex',gap:4}}>
+                              <button onClick={()=>{setEditObj(obj);setModal('custom_objectif')}} style={{width:24,height:24,border:'1.5px solid var(--outside-cream2)',borderRadius:'var(--radius-sm)',background:'white',cursor:'pointer',fontSize:'0.65rem',display:'flex',alignItems:'center',justifyContent:'center'}}>✏️</button>
+                              <button onClick={()=>deleteCustomObjectif(obj)} style={{width:24,height:24,border:'1.5px solid #FDEEEC',borderRadius:'var(--radius-sm)',background:'#FDEEEC',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}><Trash2 size={12} style={{color:'var(--danger)'}}/></button>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+                          {isManager ? (
+                            <input type="number" defaultValue={obj.valeur_actuelle||0}
+                              onBlur={e=>updateCustomValeur(obj, e.target.value)}
+                              style={{width:70,padding:'4px 8px',borderRadius:'var(--radius-sm)',border:'1.5px solid var(--outside-cream2)',fontSize:'0.8rem',fontWeight:700}}/>
+                          ) : (
+                            <span style={{fontWeight:700,fontSize:'0.82rem'}}>{obj.valeur_actuelle||0}</span>
+                          )}
+                          <span style={{fontSize:'0.72rem',color:'var(--muted)'}}>/ {obj.valeur_cible} {obj.unite}</span>
+                        </div>
+                        <div style={{height:6,background:'var(--outside-cream)',borderRadius:3,overflow:'hidden'}}>
+                          <div style={{width:pct+'%',height:'100%',background:ok?'var(--outside-green)':'var(--outside-amber)',borderRadius:3}}/>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -381,6 +456,11 @@ export default function Objectifs() {
           label="Objectif avis Google / mois"
           onClose={()=>setModal(null)} onSave={saveObjectif} saving={saving}
         />
+      )}
+
+      {/* MODAL OBJECTIF PERSONNALISÉ */}
+      {modal==='custom_objectif' && (
+        <CustomObjectifModal objectif={editObj} onClose={()=>{setModal(null);setEditObj(null)}} onSave={saveCustomObjectif} saving={saving}/>
       )}
     </>
   )
@@ -474,6 +554,30 @@ function ObjectifNbModal({objectif,label,onClose,onSave,saving}) {
       <div className="form-group">
         <label className="form-label">Valeur cible (par mois)</label>
         <input className="form-input" type="number" value={form.valeur_cible} onChange={e=>set('valeur_cible',e.target.value)}/>
+      </div>
+    </Modal>
+  )
+}
+
+function CustomObjectifModal({objectif,onClose,onSave,saving}) {
+  const [form,setForm]=useState({id:objectif?.id,label:objectif?.label||'',valeur_cible:objectif?.valeur_cible||10,unite:objectif?.unite||'nb'})
+  const set=(k,v)=>setForm(p=>({...p,[k]:v}))
+  return (
+    <Modal open onClose={onClose} title={objectif?'Modifier objectif':'Nouvel objectif'}
+      footer={<><button className="btn btn-outline" onClick={onClose}>Annuler</button><button className="btn btn-primary" disabled={!form.label||saving} onClick={()=>onSave(form)}>{saving?<Spinner size={16}/>:<Save size={15}/>} Enregistrer</button></>}>
+      <div className="form-group">
+        <label className="form-label">Nom de l'objectif</label>
+        <input className="form-input" value={form.label} onChange={e=>set('label',e.target.value)} placeholder="Ex: Formations équipe, Tickets satisfaction client..."/>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem'}}>
+        <div className="form-group">
+          <label className="form-label">Valeur cible</label>
+          <input className="form-input" type="number" value={form.valeur_cible} onChange={e=>set('valeur_cible',e.target.value)}/>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Unité</label>
+          <input className="form-input" value={form.unite} onChange={e=>set('unite',e.target.value)} placeholder="Ex: nb, %, DT"/>
+        </div>
       </div>
     </Modal>
   )
