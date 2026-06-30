@@ -4,7 +4,7 @@ import {
   BarChart2, CheckSquare, Coffee, Package,
   BookOpen, Star, Users, LogOut, MoreHorizontal, X, Shield,
   TrendingUp, ListChecks, Award, ClipboardList, UsersRound,
-  Receipt, Wallet, Database, ChevronRight
+  Receipt, Wallet, Database, ChevronRight, Target
 } from 'lucide-react'
 import { useAuth, hasRole } from '../hooks/useAuth'
 import { Avatar } from './UI'
@@ -35,6 +35,7 @@ const MORE_SECTIONS = [
     items: [
       { to: '/ecarts',      icon: TrendingUp,   label: 'Écarts',         minRole: 'manager' },
       { to: '/performance', icon: Award,        label: 'Performance',    minRole: 'manager' },
+      { to: '/objectifs',   icon: Target,       label: 'Objectifs',      minRole: 'manager' },
     ]
   },
   {
@@ -70,6 +71,7 @@ const ALL_NAV = [
   { to: '/standards',   icon: Star,         label: 'Standards',      section: null,             minRole: 'barista'  },
   { to: '/ecarts',          icon: TrendingUp,   label: 'Écarts',           section: 'Analyse',        minRole: 'manager'  },
   { to: '/performance',     icon: Award,        label: 'Performance',      section: null,             minRole: 'manager'  },
+  { to: '/objectifs',       icon: Target,       label: 'Objectifs',        section: null,             minRole: 'manager'  },
   { to: '/staff',           icon: UsersRound,   label: 'Staff',            section: 'Équipe',         minRole: 'manager'  },
   { to: '/finance',         icon: Wallet,       label: 'Finance',          section: 'Administration', minRole: 'manager'  },
   { to: '/admin-tasks',     icon: ClipboardList,label: 'Tâches admin',     section: null,             minRole: 'manager'  },
