@@ -4,7 +4,7 @@ import { useAuth, hasRole } from '../hooks/useAuth'
 import { Spinner, Modal } from '../components/UI'
 import { format, startOfMonth, endOfMonth, subMonths, differenceInCalendarDays } from 'date-fns'
 import { fr } from 'date-fns/locale'
-import { Plus, Save, Target, CheckCircle2, XCircle } from 'lucide-react'
+import { Plus, Save, Target, CheckCircle2, XCircle, Star } from 'lucide-react'
 
 const norm = s => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim()||''
 const fN  = (n,d=1) => n==null ? '—' : parseFloat(n).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d})
@@ -20,6 +20,7 @@ export default function Objectifs() {
   const [controles, setControles] = useState([])
   const [ventesEau, setVentesEau] = useState(0)
   const [ventesCookies, setVentesCookies] = useState(0)
+  const [avisGoogle, setAvisGoogle] = useState(null)
   const [nbJours, setNbJours] = useState(1)
   const [modal, setModal] = useState(null) // 'objectif' | 'controle'
   const [editObj, setEditObj] = useState(null)
@@ -45,6 +46,7 @@ export default function Objectifs() {
       { data: invAvant },
       { data: receptionsData },
       { data: pertesData },
+      { data: avisData },
     ] = await Promise.all([
       supabase.from('objectifs').select('*').eq('actif',true).order('type'),
       supabase.from('v_conso_theorique').select('matiere,qte_theo,cout_theo').gte('date_vente',dateFrom).lte('date_vente',dateTo),
@@ -56,6 +58,7 @@ export default function Objectifs() {
       supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire').lt('date_inventaire',dateFrom).order('date_inventaire',{ascending:false}),
       supabase.from('stock_movements').select('item_id,qty,stock_items(name,matiere_ref)').eq('type','reception').gte('created_at',dateFrom).lte('created_at',dateTo+'T23:59:59'),
       supabase.from('stock_pertes').select('item_name,qte,matiere_ref').gte('date_perte',dateFrom).lte('date_perte',dateTo),
+      supabase.from('avis_google').select('*').eq('periode',period).maybeSingle(),
     ])
 
     setObjectifs(objs||[])
@@ -142,6 +145,8 @@ export default function Objectifs() {
     }
     setVentesCookies(cookieCount)
 
+    setAvisGoogle(avisData || null)
+
     setLoading(false)
   }
 
@@ -166,9 +171,21 @@ export default function Objectifs() {
     setSaving(false); setModal(null); load()
   }
 
+  async function saveAvisGoogle(form) {
+    setSaving(true)
+    const payload = { periode: period, nb_avis: parseInt(form.nb_avis||0), note_moyenne: form.note_moyenne?parseFloat(form.note_moyenne):null }
+    if (avisGoogle?.id) {
+      await supabase.from('avis_google').update(payload).eq('id', avisGoogle.id)
+    } else {
+      await supabase.from('avis_google').insert(payload)
+    }
+    setSaving(false); setModal(null); load()
+  }
+
   const objEau = objectifs.find(o=>o.type==='vente_addition'&&o.cle==='eau')
   const objCookies = objectifs.find(o=>o.type==='vente_addition'&&o.cle==='cookies')
   const objEcart = objectifs.find(o=>o.type==='ecart_conso'&&o.cle==='global')
+  const objAvis = objectifs.find(o=>o.type==='avis_google'&&o.cle==='nb_avis')
 
   const moyenneEauJour = nbJours>0 ? ventesEau/nbJours : 0
   const moyenneCookiesJour = nbJours>0 ? ventesCookies/nbJours : 0
@@ -293,6 +310,39 @@ export default function Objectifs() {
                 <div style={{fontSize:'0.65rem',color:'var(--muted)',marginTop:2}}>{fN(ventesCookies,0)} ventes total sur {nbJours} jours</div>
               </div>
             </div>
+
+            {/* 4. AVIS GOOGLE */}
+            <div className="card" style={{padding:'1rem',marginTop:'1rem'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+                <div style={{fontWeight:800,fontSize:'0.85rem',display:'flex',alignItems:'center',gap:6}}>
+                  <Star size={15}/> Avis Google
+                </div>
+                {isManager && <button onClick={()=>setModal('avis_google')} className="btn btn-primary btn-sm"><Plus size={12}/> Saisir</button>}
+              </div>
+              {isManager && (
+                <button onClick={()=>setModal('objectif_avis')} style={{fontSize:'0.68rem',color:'var(--outside-orange)',background:'none',border:'none',fontWeight:700,cursor:'pointer',marginBottom:8,padding:0}}>
+                  Modifier l'objectif ({objAvis?.valeur_cible||10}/mois)
+                </button>
+              )}
+              {avisGoogle ? (
+                <div style={{display:'flex',alignItems:'center',gap:14}}>
+                  <div>
+                    <div style={{fontFamily:'var(--font-display)',fontSize:'1.4rem',color:objAvis&&avisGoogle.nb_avis>=objAvis.valeur_cible?'var(--outside-green)':'var(--outside-amber)'}}>
+                      {avisGoogle.nb_avis}
+                    </div>
+                    <div style={{fontSize:'0.65rem',color:'var(--muted)'}}>nouveaux avis {objAvis?`/ objectif ${objAvis.valeur_cible}`:''}</div>
+                  </div>
+                  {avisGoogle.note_moyenne && (
+                    <div>
+                      <div style={{fontFamily:'var(--font-display)',fontSize:'1.2rem',color:'var(--outside-dark)'}}>{avisGoogle.note_moyenne.toFixed(1)} ⭐</div>
+                      <div style={{fontSize:'0.65rem',color:'var(--muted)'}}>note moyenne</div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{fontSize:'0.75rem',color:'var(--muted)',fontStyle:'italic'}}>Aucune saisie pour ce mois.</div>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -317,6 +367,20 @@ export default function Objectifs() {
       {/* MODAL CONTRÔLE */}
       {modal==='controle' && (
         <ControleModal onClose={()=>setModal(null)} onSave={saveControle} saving={saving}/>
+      )}
+
+      {/* MODAL AVIS GOOGLE */}
+      {modal==='avis_google' && (
+        <AvisGoogleModal avisGoogle={avisGoogle} onClose={()=>setModal(null)} onSave={saveAvisGoogle} saving={saving}/>
+      )}
+
+      {/* MODAL OBJECTIF AVIS GOOGLE */}
+      {modal==='objectif_avis' && (
+        <ObjectifNbModal
+          objectif={objAvis || {type:'avis_google', cle:'nb_avis', valeur_cible:10, unite:'nb/mois'}}
+          label="Objectif avis Google / mois"
+          onClose={()=>setModal(null)} onSave={saveObjectif} saving={saving}
+        />
       )}
     </>
   )
@@ -379,6 +443,38 @@ function ControleModal({onClose,onSave,saving}) {
       </div>
       <div className="form-group"><label className="form-label">Date</label><input className="form-input" type="date" value={form.date} onChange={e=>set('date',e.target.value)}/></div>
       <div className="form-group"><label className="form-label">Note (optionnel)</label><input className="form-input" value={form.note} onChange={e=>set('note',e.target.value)} placeholder="Détail de l'écart constaté"/></div>
+    </Modal>
+  )
+}
+
+function AvisGoogleModal({avisGoogle,onClose,onSave,saving}) {
+  const [form,setForm]=useState({nb_avis:avisGoogle?.nb_avis||'',note_moyenne:avisGoogle?.note_moyenne||''})
+  const set=(k,v)=>setForm(p=>({...p,[k]:v}))
+  return (
+    <Modal open onClose={onClose} title="Avis Google du mois"
+      footer={<><button className="btn btn-outline" onClick={onClose}>Annuler</button><button className="btn btn-primary" disabled={form.nb_avis===''||saving} onClick={()=>onSave(form)}>{saving?<Spinner size={16}/>:<Save size={15}/>} Enregistrer</button></>}>
+      <div className="form-group">
+        <label className="form-label">Nombre de nouveaux avis</label>
+        <input className="form-input" type="number" value={form.nb_avis} onChange={e=>set('nb_avis',e.target.value)} placeholder="Ex: 12"/>
+      </div>
+      <div className="form-group">
+        <label className="form-label">Note moyenne actuelle (optionnel)</label>
+        <input className="form-input" type="number" step="0.1" min="1" max="5" value={form.note_moyenne} onChange={e=>set('note_moyenne',e.target.value)} placeholder="Ex: 4.6"/>
+      </div>
+    </Modal>
+  )
+}
+
+function ObjectifNbModal({objectif,label,onClose,onSave,saving}) {
+  const [form,setForm]=useState({id:objectif?.id,type:objectif?.type,cle:objectif?.cle,valeur_cible:objectif?.valeur_cible||10,unite:objectif?.unite||'nb/mois'})
+  const set=(k,v)=>setForm(p=>({...p,[k]:v}))
+  return (
+    <Modal open onClose={onClose} title={label}
+      footer={<><button className="btn btn-outline" onClick={onClose}>Annuler</button><button className="btn btn-primary" disabled={saving} onClick={()=>onSave(form)}>{saving?<Spinner size={16}/>:<Save size={15}/>} Enregistrer</button></>}>
+      <div className="form-group">
+        <label className="form-label">Valeur cible (par mois)</label>
+        <input className="form-input" type="number" value={form.valeur_cible} onChange={e=>set('valeur_cible',e.target.value)}/>
+      </div>
     </Modal>
   )
 }
