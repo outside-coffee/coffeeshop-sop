@@ -139,13 +139,14 @@ export default function Objectifs() {
     }
     setVentesEau(eauCount)
 
-    // Ventes Cookies (famille COOKIESIDE)
+    // Ventes Cookies (famille COOKIESIDE + tout produit contenant "COOKIE")
     const familleMap = {}
     for (const p of (produitsData||[])) familleMap[norm(p.nom_produit)] = p.famille
     let cookieCount = 0
     for (const v of (ventesData||[])) {
       const fam = familleMap[norm(v.produit)]
-      if (fam === 'COOKIESIDE') cookieCount += parseFloat(v.qte||0)
+      const isCookie = fam === 'COOKIESIDE' || norm(v.produit).includes('cookie')
+      if (isCookie) cookieCount += parseFloat(v.qte||0)
     }
     setVentesCookies(cookieCount)
 
