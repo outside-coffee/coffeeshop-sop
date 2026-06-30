@@ -19,6 +19,7 @@ import Staff from './pages/Staff'
 import Factures from './pages/Factures'
 import Finance from './pages/Finance'
 import Catalogue from './pages/Catalogue'
+import Objectifs from './pages/Objectifs'
 import { Spinner } from './components/UI'
 
 function ProtectedLayout() {
@@ -54,6 +55,7 @@ function ProtectedLayout() {
           <Route path="/finance" element={<Finance />} />
           <Route path="/catalogue" element={<Catalogue />} />
           <Route path="/performance" element={<Performance />} />
+          <Route path="/objectifs" element={<Objectifs />} />
         </Routes>
       </main>
       <ToastContainer />
