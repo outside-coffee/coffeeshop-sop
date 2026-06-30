@@ -43,7 +43,6 @@ export default function Objectifs() {
       { data: consoData },
       { data: mp },
       { data: ctrl },
-      { data: ventesData },
       { data: produitsData },
       { data: invFin },
       { data: invAvant },
@@ -56,7 +55,6 @@ export default function Objectifs() {
       supabase.from('v_conso_theorique').select('matiere,qte_theo,cout_theo').gte('date_vente',dateFrom).lte('date_vente',dateTo),
       supabase.from('matiere_premiere').select('matiere,prix,quantite,actif'),
       supabase.from('controles_fiches').select('*').gte('date_controle',dateFrom).lte('date_controle',dateTo).order('date_controle',{ascending:false}),
-      supabase.from('transaction_line').select('produit,qte,date_vente,numtable').gte('date_vente',dateFrom).lte('date_vente',dateTo),
       supabase.from('produits').select('nom_produit,famille'),
       supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire').gte('date_inventaire',dateFrom).lte('date_inventaire',dateTo).order('date_inventaire',{ascending:false}),
       supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire').lt('date_inventaire',dateFrom).order('date_inventaire',{ascending:false}),
@@ -64,6 +62,20 @@ export default function Objectifs() {
       supabase.from('stock_pertes').select('item_name,qte,matiere_ref').gte('date_perte',dateFrom).lte('date_perte',dateTo),
       supabase.from('avis_google').select('*').eq('periode',period).maybeSingle(),
     ])
+
+    // Pagination par batch pour transaction_line (évite la limite Supabase de 1000)
+    let ventesData = [], page = 0
+    while (true) {
+      const { data: batch } = await supabase
+        .from('transaction_line')
+        .select('produit,qte,date_vente,numtable')
+        .gte('date_vente', dateFrom).lte('date_vente', dateTo)
+        .range(page * 1000, (page + 1) * 1000 - 1)
+      if (!batch || batch.length === 0) break
+      ventesData = ventesData.concat(batch)
+      if (batch.length < 1000) break
+      page++
+    }
 
     setObjectifs(objs||[])
     setCustomObjectifs(customObjs||[])
