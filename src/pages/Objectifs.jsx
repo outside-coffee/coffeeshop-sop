@@ -37,46 +37,92 @@ export default function Objectifs() {
     const [
       { data: objs },
       { data: consoData },
-      { data: invFin },
       { data: mp },
       { data: ctrl },
       { data: ventesData },
       { data: produitsData },
+      { data: invFin },
+      { data: invAvant },
+      { data: receptionsData },
+      { data: pertesData },
     ] = await Promise.all([
       supabase.from('objectifs').select('*').eq('actif',true).order('type'),
       supabase.from('v_conso_theorique').select('matiere,qte_theo,cout_theo').gte('date_vente',dateFrom).lte('date_vente',dateTo),
-      supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire').gte('date_inventaire',dateFrom).lte('date_inventaire',dateTo).order('date_inventaire',{ascending:false}),
-      supabase.from('matiere_premiere').select('matiere,prix,quantite').eq('actif',true),
+      supabase.from('matiere_premiere').select('matiere,prix,quantite,actif'),
       supabase.from('controles_fiches').select('*').gte('date_controle',dateFrom).lte('date_controle',dateTo).order('date_controle',{ascending:false}),
       supabase.from('transaction_line').select('produit,qte,date_vente').gte('date_vente',dateFrom).lte('date_vente',dateTo),
       supabase.from('produits').select('nom_produit,famille'),
+      supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire').gte('date_inventaire',dateFrom).lte('date_inventaire',dateTo).order('date_inventaire',{ascending:false}),
+      supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire').lt('date_inventaire',dateFrom).order('date_inventaire',{ascending:false}),
+      supabase.from('stock_movements').select('item_id,qty,stock_items(name,matiere_ref)').eq('type','reception').gte('created_at',dateFrom).lte('created_at',dateTo+'T23:59:59'),
+      supabase.from('stock_pertes').select('item_name,qte,matiere_ref').gte('date_perte',dateFrom).lte('date_perte',dateTo),
     ])
 
     setObjectifs(objs||[])
     setControles(ctrl||[])
 
-    // Calcul écart moyen (approximation simple : moyenne des |écart%| pondérée par coût)
+    // ── ÉCART GLOBAL EN VALEUR DE STOCK (DT) ──
+    const baseNames = new Set() // pas de filtre bases ici, simplifié
     const mpMap = {}
-    for (const m of (mp||[])) mpMap[norm(m.matiere)] = m.quantite>0 ? m.prix/m.quantite : 0
+    for (const m of (mp||[])) if (m.actif!==false) mpMap[norm(m.matiere)] = { prixUnit: m.quantite>0?m.prix/m.quantite:0, nom: m.matiere }
+
     const consoTheoMap = {}
     for (const c of (consoData||[])) {
       const k = norm(c.matiere)
       consoTheoMap[k] = (consoTheoMap[k]||0) + parseFloat(c.qte_theo||0)
     }
-    const invMap = {}
-    for (const inv of (invFin||[])) if (!invMap[inv.item_name]) invMap[inv.item_name] = parseFloat(inv.qte_physique||0)
 
-    // Sans logique de stock début ici (approximation : on regarde si dispo)
-    let totalEcartAbs = 0, totalCoutTheo = 0, count = 0
+    const invFinMap = {}
+    for (const inv of (invFin||[])) {
+      if (!invFinMap[inv.item_name] || inv.date_inventaire > invFinMap[inv.item_name+'_d']) {
+        invFinMap[inv.item_name] = parseFloat(inv.qte_physique||0)
+        invFinMap[inv.item_name+'_d'] = inv.date_inventaire
+      }
+    }
+    const invAvantMap = {}
+    const seenAvant = new Set()
+    for (const inv of (invAvant||[])) {
+      if (!seenAvant.has(inv.item_name)) { invAvantMap[inv.item_name] = parseFloat(inv.qte_physique||0); seenAvant.add(inv.item_name) }
+    }
+    const recuMap = {}
+    for (const r of (receptionsData||[])) {
+      const k = norm(r.stock_items?.matiere_ref || r.stock_items?.name || '')
+      if (k) recuMap[k] = (recuMap[k]||0) + parseFloat(r.qty||0)
+    }
+    const pertesMap = {}
+    for (const p of (pertesData||[])) {
+      const k = norm(p.matiere_ref || p.item_name)
+      pertesMap[k] = (pertesMap[k]||0) + parseFloat(p.qte||0)
+    }
+
+    let totalCoutTheo = 0, totalCoutEcart = 0
     for (const k of Object.keys(consoTheoMap)) {
+      const info = mpMap[k]
+      if (!info) continue
       const consoTheo = consoTheoMap[k]
       if (consoTheo <= 0) continue
-      // approximation grossière de l'écart % moyen basé sur coût théo (sans calcul complet ici)
-      count++
+      const prixUnit = info.prixUnit || 0
+      const coutTheo = consoTheo * prixUnit
+      totalCoutTheo += coutTheo
+
+      // Matching item_name (matiere_ref == nom matiere généralement)
+      const stockFin = invFinMap[info.nom]
+      const stockDebut = invAvantMap[info.nom] ?? 0
+      const recu = recuMap[k] || 0
+      const pertes = pertesMap[k] || 0
+
+      if (stockFin !== undefined) {
+        const stockTheoFin = Math.max(0, stockDebut + recu - consoTheo - pertes)
+        const ecart = stockFin - stockTheoFin // physique - théo
+        totalCoutEcart += Math.abs(ecart) * prixUnit
+      }
     }
-    // Pour avoir un vrai chiffre, on relie ça plutôt à la moyenne des écarts déjà calculés ailleurs
-    // Ici on affiche juste le nombre de matières suivies comme proxy simple
-    setEcartMoyen(null) // affichage informatif uniquement, lien renvoyé vers page Écarts
+
+    setEcartMoyen(totalCoutTheo>0 ? {
+      totalCoutTheo,
+      totalCoutEcart,
+      pct: (totalCoutEcart/totalCoutTheo*100),
+    } : null)
 
     // Ventes Eau
     const eauNames = new Set(['eau 0.5','eau 1/2'])
@@ -153,14 +199,32 @@ export default function Objectifs() {
             <div className="card" style={{padding:'1rem',marginBottom:'1rem'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
                 <div style={{fontWeight:800,fontSize:'0.85rem',display:'flex',alignItems:'center',gap:6}}>
-                  <Target size={15}/> Écart conso réelle vs théorique
+                  <Target size={15}/> Écart conso (valeur stock)
                 </div>
                 {isManager && <button onClick={()=>{setEditObj(objEcart);setModal('objectif_ecart')}} style={{fontSize:'0.7rem',color:'var(--outside-orange)',background:'none',border:'none',fontWeight:700,cursor:'pointer'}}>Objectif</button>}
               </div>
-              <div style={{fontSize:'0.78rem',color:'var(--muted)',marginBottom:8}}>
-                Objectif : écart &lt; {objEcart?.valeur_cible||5}%. Voir le détail complet dans la page <strong>Écarts</strong> pour le calcul par matière.
-              </div>
-              <a href="/ecarts" className="btn btn-outline btn-sm" style={{display:'inline-flex'}}>Voir les écarts détaillés →</a>
+              {ecartMoyen ? (
+                <>
+                  <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:8}}>
+                    <div style={{fontFamily:'var(--font-display)',fontSize:'1.4rem',color:ecartMoyen.pct<=(objEcart?.valeur_cible||5)?'var(--outside-green)':'var(--danger)'}}>
+                      {ecartMoyen.pct.toFixed(1)}%
+                    </div>
+                    <div style={{fontSize:'0.72rem',color:'var(--muted)'}}>objectif &lt; {objEcart?.valeur_cible||5}%</div>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,fontSize:'0.75rem'}}>
+                    <div style={{background:'var(--outside-cream)',borderRadius:'var(--radius-sm)',padding:'6px 10px'}}>
+                      <div style={{fontWeight:700}}>{ecartMoyen.totalCoutTheo.toFixed(2)} DT</div>
+                      <div style={{color:'var(--muted)',fontSize:'0.65rem'}}>Coût théorique</div>
+                    </div>
+                    <div style={{background:'#FCEBEB',borderRadius:'var(--radius-sm)',padding:'6px 10px'}}>
+                      <div style={{fontWeight:700,color:'var(--danger)'}}>{ecartMoyen.totalCoutEcart.toFixed(2)} DT</div>
+                      <div style={{color:'var(--muted)',fontSize:'0.65rem'}}>Écart en valeur</div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div style={{fontSize:'0.75rem',color:'var(--muted)',fontStyle:'italic'}}>Pas assez de données (inventaire requis sur la période).</div>
+              )}
             </div>
 
             {/* 2. RESPECT FICHES TECHNIQUES */}
