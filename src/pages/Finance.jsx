@@ -680,17 +680,21 @@ function TabCoutStock({ period }) {
     const mpMap = {}
     for (const m of (mp||[])) mpMap[m.matiere?.toLowerCase().trim()] = m.quantite>0 ? m.prix/m.quantite : 0
 
-    // Dernier inventaire début de période par article
+    // Dernier inventaire début de période (même logique que Ecarts — norm sur item_name)
     const invDebutMap = {}
-    for (const inv of (invDebut||[])) if (!invDebutMap[inv.item_name]) invDebutMap[inv.item_name] = parseFloat(inv.qte_physique||0)
+    const seenAvant = new Set()
+    for (const inv of (invDebut||[])) {
+      const k = inv.item_name?.trim()
+      if (k && !seenAvant.has(k)) { invDebutMap[k] = parseFloat(inv.qte_physique||0); seenAvant.add(k) }
+    }
 
-    // Dernier inventaire fin de période par article (le plus récent dans la période)
+    // Dernier inventaire fin de période (le plus récent dans la période)
     const invFinMap = {}
+    const seenFin = new Set()
     for (const inv of (invFin||[])) {
-      if (!invFinMap[inv.item_name] || inv.date_inventaire > invFinMap[inv.item_name+'_date']) {
-        invFinMap[inv.item_name] = parseFloat(inv.qte_physique||0)
-        invFinMap[inv.item_name+'_date'] = inv.date_inventaire
-      }
+      const k = inv.item_name?.trim()
+      if (!k) continue
+      if (!seenFin.has(k)) { invFinMap[k] = parseFloat(inv.qte_physique||0); seenFin.add(k) }
     }
 
     // Réceptions par matière
@@ -710,8 +714,9 @@ function TabCoutStock({ period }) {
       const siItem = (si||[]).find(s=>s.matiere_ref?.toLowerCase().trim()===k)
       const nom = siItem?.matiere_ref || k
       const prixUnit = mpMap[k] || 0
-      const stockDebut = invDebutMap[siItem?.name||''] ?? null
-      const stockFin   = invFinMap[siItem?.name||'']   ?? null
+      const nomItem = siItem?.name?.trim() || ''
+      const stockDebut = nomItem ? (invDebutMap[nomItem] ?? null) : null
+      const stockFin   = nomItem ? (invFinMap[nomItem]   ?? null) : null
       const recu = recuMap[k] || 0
       const recuDTVal = recuDT[k] || (recu * prixUnit)
 
