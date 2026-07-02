@@ -24,6 +24,7 @@ export default function Objectifs() {
   const [avisGoogle, setAvisGoogle] = useState(null)
   const [customObjectifs, setCustomObjectifs] = useState([])
   const [nbJours, setNbJours] = useState(1)
+  const [nbJoursOuverts, setNbJoursOuverts] = useState(1)
   const [modal, setModal] = useState(null) // 'objectif' | 'controle'
   const [editObj, setEditObj] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -144,6 +145,15 @@ export default function Objectifs() {
       pct: (totalCoutEcart/totalCoutTheo*100),
     } : null)
 
+    // Jours d'ouverture = jours distincts avec au moins 1 vente (hors conso perso)
+    const joursOuverts = new Set()
+    for (const v of ventesData) {
+      const dateVente = new Date(v.date_vente)
+      const isConsoPerso = v.numtable === 32 || (v.numtable === 22 && dateVente < DATE_CHG_TABLE)
+      if (!isConsoPerso) joursOuverts.add(v.date_vente)
+    }
+    setNbJoursOuverts(joursOuverts.size || 1)
+
     // Ventes Eau (exclut conso perso)
     const eauNames = new Set(['eau 0.5','eau 1/2'])
     let eauCount = 0
@@ -238,8 +248,8 @@ export default function Objectifs() {
   const objEcart = objectifs.find(o=>o.type==='ecart_conso'&&o.cle==='global')
   const objAvis = objectifs.find(o=>o.type==='avis_google'&&o.cle==='nb_avis')
 
-  const moyenneEauJour = nbJours>0 ? ventesEau/nbJours : 0
-  const moyenneCookiesJour = nbJours>0 ? ventesCookies/nbJours : 0
+  const moyenneEauJour = nbJoursOuverts>0 ? ventesEau/nbJoursOuverts : 0
+  const moyenneCookiesJour = nbJoursOuverts>0 ? ventesCookies/nbJoursOuverts : 0
   const eauOk = objEau ? moyenneEauJour >= objEau.valeur_cible : null
   const cookiesOk = objCookies ? moyenneCookiesJour >= objCookies.valeur_cible : null
 
@@ -338,7 +348,7 @@ export default function Objectifs() {
                 <div style={{height:8,background:'var(--outside-cream)',borderRadius:4,overflow:'hidden'}}>
                   <div style={{width:Math.min(100,objEau?moyenneEauJour/objEau.valeur_cible*100:0)+'%',height:'100%',background:eauOk?'var(--outside-green)':'var(--outside-amber)',borderRadius:4}}/>
                 </div>
-                <div style={{fontSize:'0.65rem',color:'var(--muted)',marginTop:2}}>{fN(ventesEau,0)} ventes total sur {nbJours} jours</div>
+                <div style={{fontSize:'0.65rem',color:'var(--muted)',marginTop:2}}>{fN(ventesEau,0)} ventes total sur {nbJoursOuverts} jours ouverts</div>
               </div>
 
               {/* COOKIES */}
@@ -352,7 +362,7 @@ export default function Objectifs() {
                 <div style={{height:8,background:'var(--outside-cream)',borderRadius:4,overflow:'hidden'}}>
                   <div style={{width:Math.min(100,objCookies?moyenneCookiesJour/objCookies.valeur_cible*100:0)+'%',height:'100%',background:cookiesOk?'var(--outside-green)':'var(--outside-amber)',borderRadius:4}}/>
                 </div>
-                <div style={{fontSize:'0.65rem',color:'var(--muted)',marginTop:2}}>{fN(ventesCookies,0)} ventes total sur {nbJours} jours</div>
+                <div style={{fontSize:'0.65rem',color:'var(--muted)',marginTop:2}}>{fN(ventesCookies,0)} ventes total sur {nbJoursOuverts} jours ouverts</div>
               </div>
             </div>
 
