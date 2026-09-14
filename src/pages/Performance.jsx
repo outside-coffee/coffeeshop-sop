@@ -7,8 +7,8 @@ import { Download, ChevronDown, ChevronUp } from 'lucide-react'
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────
 const DATE_CHG_TABLE = new Date('2026-03-19') // avant = table 22 = conso perso
-const EXCLUS_QTE     = ['EXTRA', 'EAU 1/2', 'EAU 0.5']
-const EXCLUS_TICKET  = ['EXTRA', 'EAU 1/2', 'EAU 0.5'] // + famille EXTRA + COOKIESIDE
+const EXCLUS_QTE     = ['EXTRA', 'EAU 1/2', 'EAU 0.5', 'EAU 1.0']
+const EXCLUS_TICKET  = ['EXTRA', 'EAU 1/2', 'EAU 0.5','EAU 1.0'] // + famille EXTRA + COOKIESIDE
 
 const today     = new Date()
 const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
