@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { Spinner } from '../components/UI'
-import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
+import { addDays, endOfMonth, format, parseISO, startOfMonth, subMonths } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Download, ChevronDown, ChevronUp } from 'lucide-react'
 
@@ -93,14 +93,21 @@ export default function Ecarts() {
       return
     }
 
-    const opening = inventoryDates.find(date => date <= from)
-    const closing = inventoryDates.find(date => date <= to && date > opening)
+    const inventaireProche = (target, offsets) => offsets
+      .map(offset => format(addDays(parseISO(target), offset), 'yyyy-MM-dd'))
+      .find(date => inventoryDates.includes(date))
+    const opening = inventaireProche(from, [0, -1, 1])
+    const closing = inventaireProche(to, [0, 1, -1])
     if (!opening) {
-      setError(`Aucun inventaire disponible avant le ${from}.`)
+      setError(`Aucun inventaire disponible à J-1, J ou J+1 autour du ${from}.`)
       return
     }
     if (!closing) {
-      setError(`Aucun inventaire de clôture disponible entre le ${from} et le ${to}. Le calcul sera possible après le prochain inventaire.`)
+      setError(`Aucun inventaire de clôture disponible à J-1, J ou J+1 autour du ${to}.`)
+      return
+    }
+    if (opening >= closing) {
+      setError('Les deux inventaires retenus ne permettent pas de calculer un intervalle valide.')
       return
     }
 
@@ -247,6 +254,9 @@ tr:nth-child(even) td{background:#fafafa}
             </button>
             <button className="btn btn-outline btn-sm" disabled={loading} onClick={()=>appliquerRaccourci('current')}>Ce mois</button>
             <button className="btn btn-outline btn-sm" disabled={loading} onClick={()=>appliquerRaccourci('previous')}>M-1</button>
+          </div>
+          <div style={{fontSize:'0.68rem',color:'var(--muted)',marginBottom:'0.6rem'}}>
+            Un inventaire à J-1, J ou J+1 peut être utilisé pour chaque borne, y compris sur le mois voisin.
           </div>
           <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
             <button className="btn btn-outline btn-sm" disabled={loading||!requestedFrom||!requestedTo} onClick={()=>calculerPeriode()}>
