@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth, hasRole } from '../hooks/useAuth'
 import { Spinner, Modal } from '../components/UI'
-import { format, startOfMonth, endOfMonth, subMonths, differenceInCalendarDays } from 'date-fns'
+import { addDays, format, parseISO, startOfMonth, endOfMonth, subMonths, differenceInCalendarDays } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Plus, Save, Target, CheckCircle2, XCircle, Star, Trash2 } from 'lucide-react'
 
@@ -72,12 +72,20 @@ export default function Objectifs() {
     setControles(ctrl||[])
 
     // ── ÉCART GLOBAL : même source de calcul que la page Écarts ──
+    const inventoryFrom = format(addDays(parseISO(dateFrom), -1), 'yyyy-MM-dd')
+    const inventoryTo = format(addDays(parseISO(dateTo), 1), 'yyyy-MM-dd')
     const { data: inventoryDates } = await supabase
       .from('stock_inventaires').select('date_inventaire')
-      .lte('date_inventaire', dateTo).order('date_inventaire', { ascending: false })
+      .gte('date_inventaire', inventoryFrom).lte('date_inventaire', inventoryTo)
+      .order('date_inventaire', { ascending: false })
     const distinctDates = [...new Set((inventoryDates || []).map(row => row.date_inventaire))]
-    if (distinctDates.length >= 2) {
-      const interval = { from: distinctDates[1], to: distinctDates[0] }
+    const inventaireProche = (target, offsets) => offsets
+      .map(offset => format(addDays(parseISO(target), offset), 'yyyy-MM-dd'))
+      .find(date => distinctDates.includes(date))
+    const opening = inventaireProche(dateFrom, [0, -1, 1])
+    const closing = inventaireProche(dateTo, [0, 1, -1])
+    if (opening && closing && opening < closing) {
+      const interval = { from: opening, to: closing }
       const { data: varianceRows } = await supabase.rpc('get_consumption_variance', {
         p_from: interval.from, p_to: interval.to,
       })
@@ -239,7 +247,7 @@ export default function Objectifs() {
                     <div style={{fontWeight:700,color:'var(--danger)',fontSize:'0.82rem'}}>{ecartMoyen.totalCoutEcart.toFixed(2)} DT</div>
                     <div style={{color:'var(--muted)',fontSize:'0.65rem'}}>Pertes sans compensation des sous-consommations</div>
                   </div>
-                  {ecartInterval&&<div style={{fontSize:'0.65rem',color:'var(--muted)',marginTop:6}}>Dernier intervalle clôturé : {ecartInterval.from} → {ecartInterval.to}</div>}
+                  {ecartInterval&&<div style={{fontSize:'0.65rem',color:'var(--muted)',marginTop:6}}>Inventaires utilisés (tolérance J-1/J/J+1) : {ecartInterval.from} → {ecartInterval.to}</div>}
                 </>
               ) : (
                 <div style={{fontSize:'0.75rem',color:'var(--muted)',fontStyle:'italic'}}>Pas assez de données (inventaire requis sur la période).</div>
