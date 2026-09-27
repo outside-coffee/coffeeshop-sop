@@ -18,6 +18,7 @@ export default function Objectifs() {
   const [loading, setLoading] = useState(true)
   const [objectifs, setObjectifs] = useState([])
   const [ecartMoyen, setEcartMoyen] = useState(null)
+  const [ecartInterval, setEcartInterval] = useState(null)
   const [controles, setControles] = useState([])
   const [ventesEau, setVentesEau] = useState(0)
   const [ventesCookies, setVentesCookies] = useState(0)
@@ -41,26 +42,14 @@ export default function Objectifs() {
     const [
       { data: objs },
       { data: customObjs },
-      { data: consoData },
-      { data: mp },
       { data: ctrl },
       { data: produitsData },
-      { data: invFin },
-      { data: invAvant },
-      { data: receptionsData },
-      { data: pertesData },
       { data: avisData },
     ] = await Promise.all([
       supabase.from('objectifs').select('*').eq('actif',true).order('type'),
       supabase.from('objectifs').select('*').eq('is_custom',true).eq('periode',period).order('created_at'),
-      supabase.from('v_conso_theorique').select('matiere,qte_theo,cout_theo').gte('date_vente',dateFrom).lte('date_vente',dateTo),
-      supabase.from('matiere_premiere').select('matiere,prix,quantite,actif'),
       supabase.from('controles_fiches').select('*').gte('date_controle',dateFrom).lte('date_controle',dateTo).order('date_controle',{ascending:false}),
       supabase.from('produits').select('nom_produit,famille'),
-      supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire').gte('date_inventaire',dateFrom).lte('date_inventaire',dateTo).order('date_inventaire',{ascending:false}),
-      supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire').lt('date_inventaire',dateFrom).order('date_inventaire',{ascending:false}),
-      supabase.from('stock_movements').select('item_id,qty,stock_items(name,matiere_ref)').eq('type','reception').gte('created_at',dateFrom).lte('created_at',dateTo+'T23:59:59'),
-      supabase.from('stock_pertes').select('item_name,qte,matiere_ref').gte('date_perte',dateFrom).lte('date_perte',dateTo),
       supabase.from('avis_google').select('*').eq('periode',period).maybeSingle(),
     ])
 
@@ -82,68 +71,25 @@ export default function Objectifs() {
     setCustomObjectifs(customObjs||[])
     setControles(ctrl||[])
 
-    // ── ÉCART GLOBAL EN VALEUR DE STOCK (DT) ──
-    const baseNames = new Set() // pas de filtre bases ici, simplifié
-    const mpMap = {}
-    for (const m of (mp||[])) if (m.actif!==false) mpMap[norm(m.matiere)] = { prixUnit: m.quantite>0?m.prix/m.quantite:0, nom: m.matiere }
-
-    const consoTheoMap = {}
-    for (const c of (consoData||[])) {
-      const k = norm(c.matiere)
-      consoTheoMap[k] = (consoTheoMap[k]||0) + parseFloat(c.qte_theo||0)
+    // ── ÉCART GLOBAL : même source de calcul que la page Écarts ──
+    const { data: inventoryDates } = await supabase
+      .from('stock_inventaires').select('date_inventaire')
+      .lte('date_inventaire', dateTo).order('date_inventaire', { ascending: false })
+    const distinctDates = [...new Set((inventoryDates || []).map(row => row.date_inventaire))]
+    if (distinctDates.length >= 2) {
+      const interval = { from: distinctDates[1], to: distinctDates[0] }
+      const { data: varianceRows } = await supabase.rpc('get_consumption_variance', {
+        p_from: interval.from, p_to: interval.to,
+      })
+      const totalCoutTheo = (varianceRows || []).reduce((sum, row) => sum + parseFloat(row.cout_theorique || 0), 0)
+      const totalCoutEcart = (varianceRows || []).reduce((sum, row) => sum + Math.max(parseFloat(row.cout_ecart || 0), 0), 0)
+      setEcartInterval(interval)
+      setEcartMoyen(totalCoutTheo > 0 ? {
+        totalCoutTheo, totalCoutEcart, pct: totalCoutEcart / totalCoutTheo * 100,
+      } : null)
+    } else {
+      setEcartInterval(null); setEcartMoyen(null)
     }
-
-    const invFinMap = {}
-    for (const inv of (invFin||[])) {
-      if (!invFinMap[inv.item_name] || inv.date_inventaire > invFinMap[inv.item_name+'_d']) {
-        invFinMap[inv.item_name] = parseFloat(inv.qte_physique||0)
-        invFinMap[inv.item_name+'_d'] = inv.date_inventaire
-      }
-    }
-    const invAvantMap = {}
-    const seenAvant = new Set()
-    for (const inv of (invAvant||[])) {
-      if (!seenAvant.has(inv.item_name)) { invAvantMap[inv.item_name] = parseFloat(inv.qte_physique||0); seenAvant.add(inv.item_name) }
-    }
-    const recuMap = {}
-    for (const r of (receptionsData||[])) {
-      const k = norm(r.stock_items?.matiere_ref || r.stock_items?.name || '')
-      if (k) recuMap[k] = (recuMap[k]||0) + parseFloat(r.qty||0)
-    }
-    const pertesMap = {}
-    for (const p of (pertesData||[])) {
-      const k = norm(p.matiere_ref || p.item_name)
-      pertesMap[k] = (pertesMap[k]||0) + parseFloat(p.qte||0)
-    }
-
-    let totalCoutTheo = 0, totalCoutEcart = 0
-    for (const k of Object.keys(consoTheoMap)) {
-      const info = mpMap[k]
-      if (!info) continue
-      const consoTheo = consoTheoMap[k]
-      if (consoTheo <= 0) continue
-      const prixUnit = info.prixUnit || 0
-      const coutTheo = consoTheo * prixUnit
-      totalCoutTheo += coutTheo
-
-      // Matching item_name (matiere_ref == nom matiere généralement)
-      const stockFin = invFinMap[info.nom]
-      const stockDebut = invAvantMap[info.nom] ?? 0
-      const recu = recuMap[k] || 0
-      const pertes = pertesMap[k] || 0
-
-      if (stockFin !== undefined) {
-        const stockTheoFin = Math.max(0, stockDebut + recu - consoTheo - pertes)
-        const ecart = stockFin - stockTheoFin // physique - théo
-        totalCoutEcart += Math.abs(ecart) * prixUnit
-      }
-    }
-
-    setEcartMoyen(totalCoutTheo>0 ? {
-      totalCoutTheo,
-      totalCoutEcart,
-      pct: (totalCoutEcart/totalCoutTheo*100),
-    } : null)
 
     // Jours d'ouverture = jours distincts avec au moins 1 vente (hors conso perso)
     const joursOuverts = new Set()
@@ -277,7 +223,7 @@ export default function Objectifs() {
             <div className="card" style={{padding:'1rem',marginBottom:'1rem'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
                 <div style={{fontWeight:800,fontSize:'0.85rem',display:'flex',alignItems:'center',gap:6}}>
-                  <Target size={15}/> Écart conso (valeur stock)
+                  <Target size={15}/> Surconsommation stock
                 </div>
                 {isManager && <button onClick={()=>{setEditObj(objEcart);setModal('objectif_ecart')}} style={{fontSize:'0.7rem',color:'var(--outside-orange)',background:'none',border:'none',fontWeight:700,cursor:'pointer'}}>Objectif</button>}
               </div>
@@ -291,8 +237,9 @@ export default function Objectifs() {
                   </div>
                   <div style={{background:'#FCEBEB',borderRadius:'var(--radius-sm)',padding:'6px 10px'}}>
                     <div style={{fontWeight:700,color:'var(--danger)',fontSize:'0.82rem'}}>{ecartMoyen.totalCoutEcart.toFixed(2)} DT</div>
-                    <div style={{color:'var(--muted)',fontSize:'0.65rem'}}>Écart en valeur</div>
+                    <div style={{color:'var(--muted)',fontSize:'0.65rem'}}>Pertes sans compensation des sous-consommations</div>
                   </div>
+                  {ecartInterval&&<div style={{fontSize:'0.65rem',color:'var(--muted)',marginTop:6}}>Dernier intervalle clôturé : {ecartInterval.from} → {ecartInterval.to}</div>}
                 </>
               ) : (
                 <div style={{fontSize:'0.75rem',color:'var(--muted)',fontStyle:'italic'}}>Pas assez de données (inventaire requis sur la période).</div>

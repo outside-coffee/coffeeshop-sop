@@ -1,25 +1,18 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { Spinner } from '../components/UI'
-import { format, startOfMonth, endOfMonth, subMonths, startOfWeek, endOfWeek, subWeeks } from 'date-fns'
+import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Download, ChevronDown, ChevronUp } from 'lucide-react'
 
 const fN  = (n, d=1) => n==null ? '—' : parseFloat(n).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d})
 const fDT = n => n==null ? '—' : parseFloat(n).toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+' DT'
-const norm = s => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim()||''
-
-const today = new Date()
-const PERIODES = [
-  { label:'Ce mois',   from:format(startOfMonth(today),'yyyy-MM-dd'),                               to:format(today,'yyyy-MM-dd') },
-  { label:'M-1',       from:format(startOfMonth(subMonths(today,1)),'yyyy-MM-dd'),                  to:format(endOfMonth(subMonths(today,1)),'yyyy-MM-dd') },
-  { label:'S en cours',from:format(startOfWeek(today,{weekStartsOn:1}),'yyyy-MM-dd'),               to:format(today,'yyyy-MM-dd') },
-  { label:'S-1',       from:format(startOfWeek(subWeeks(today,1),{weekStartsOn:1}),'yyyy-MM-dd'),   to:format(endOfWeek(subWeeks(today,1),{weekStartsOn:1}),'yyyy-MM-dd') },
-]
+const toNumber = value => value == null ? null : parseFloat(value)
 
 export default function Ecarts() {
-  const [dateFrom,    setDateFrom]    = useState(PERIODES[0].from)
-  const [dateTo,      setDateTo]      = useState(PERIODES[0].to)
+  const [dateFrom,    setDateFrom]    = useState('')
+  const [dateTo,      setDateTo]      = useState('')
+  const [periods,     setPeriods]     = useState([])
   const [loading,     setLoading]     = useState(false)
   const [rows,        setRows]        = useState([])
   const [loaded,      setLoaded]      = useState(false)
@@ -31,93 +24,46 @@ export default function Ecarts() {
   const [consoDetail, setConsoDetail] = useState({}) // { matiere_norm: [{produit, nb_ventes, grammage, total}] }
   const [loadingDetail, setLoadingDetail] = useState(null) // matiere en cours de chargement
 
-  useEffect(()=>{ charger() },[])
+  useEffect(()=>{ loadPeriods() },[])
 
-  async function charger() {
+  async function loadPeriods() {
+    setLoading(true); setError('')
+    const { data, error: datesError } = await supabase
+      .from('stock_inventaires')
+      .select('date_inventaire')
+      .order('date_inventaire', { ascending: false })
+    if (datesError) {
+      setError(datesError.message); setLoading(false); return
+    }
+    const dates = [...new Set((data || []).map(row => row.date_inventaire))]
+    const available = dates.slice(0, 7).map((to, index) => ({
+      from: dates[index + 1], to,
+      label: index === 0 ? 'Dernier inventaire' : `${dates[index + 1]} → ${to}`,
+    })).filter(period => period.from)
+    setPeriods(available)
+    if (available[0]) await charger(available[0].from, available[0].to)
+    else { setError('Deux inventaires distincts sont nécessaires pour calculer les écarts.'); setLoading(false) }
+  }
+
+  async function charger(from = dateFrom, to = dateTo) {
     setLoading(true); setLoaded(false); setError(''); setIntervalle(null)
     setExpanded(null); setConsoDetail({})
 
     try {
-      const { data: inventaires, error: inventairesError } = await supabase
-        .from('stock_inventaires')
-        .select('date_inventaire')
-        .lte('date_inventaire', dateTo)
-        .order('date_inventaire', { ascending: true })
-      if (inventairesError) throw inventairesError
-
-      const datesInventaire = [...new Set((inventaires || []).map(i => i.date_inventaire))]
-      const datesDebutPossibles = datesInventaire.filter(d => d <= dateFrom)
-      const dateDebutCalcul = datesDebutPossibles[datesDebutPossibles.length - 1]
-      const dateFinCalcul = datesInventaire[datesInventaire.length - 1]
-      if (!dateDebutCalcul || !dateFinCalcul || dateDebutCalcul >= dateFinCalcul) {
-        throw new Error('Deux inventaires distincts sont nécessaires pour encadrer la période sélectionnée.')
-      }
-      setIntervalle({ from: dateDebutCalcul, to: dateFinCalcul })
-
-      // Les mouvements horodatés utilisent une borne haute exclusive afin
-      // d'inclure toute la journée du dernier inventaire.
-      const lendemainFin = format(new Date(`${dateFinCalcul}T12:00:00`), 'yyyy-MM-dd')
-      const finExclusive = format(new Date(new Date(`${lendemainFin}T12:00:00`).getTime() + 86400000), 'yyyy-MM-dd')
-
-      const responses = await Promise.all([
-        supabase.from('v_conso_theorique').select('matiere,qte_theo,cout_theo').gt('date_vente',dateDebutCalcul).lte('date_vente',dateFinCalcul),
-        supabase.from('matiere_premiere').select('matiere,prix,quantite,unite,actif').eq('actif',true),
-        supabase.from('composition_produit').select('nom_produit').eq('type','base'),
-        supabase.from('stock_inventaires').select('item_name,qte_physique').eq('date_inventaire',dateDebutCalcul),
-        supabase.from('stock_inventaires').select('item_name,qte_physique').eq('date_inventaire',dateFinCalcul),
-        supabase.from('stock_movements').select('item_id,qty,stock_items(name,matiere_ref)').eq('type','reception').gt('created_at',`${dateDebutCalcul}T23:59:59`).lt('created_at',finExclusive),
-        supabase.from('stock_pertes').select('item_name,qte,matiere_ref').gt('date_perte',dateDebutCalcul).lte('date_perte',dateFinCalcul),
-      ])
-      const failed = responses.find(r => r.error)
-      if (failed) throw failed.error
-
-      const [consoData, mp, bases, invDebut, invFin, receptions, pertes] = responses.map(r => r.data || [])
-      const baseNames = new Set(bases.map(b=>norm(b.nom_produit)))
-      const mpMap={}, invFinMap={}, invDebutMap={}, recuMap={}, pertesMap={}
-
-      for (const m of mp) if (!baseNames.has(norm(m.matiere))) mpMap[norm(m.matiere)]={prixUnit:m.quantite>0?m.prix/m.quantite:0,unite:m.unite,nom:m.matiere}
-      for (const i of invDebut) invDebutMap[norm(i.item_name)]=parseFloat(i.qte_physique||0)
-      for (const i of invFin) invFinMap[norm(i.item_name)]=parseFloat(i.qte_physique||0)
-      for (const r of receptions) { const mRef=r.stock_items?.matiere_ref||r.stock_items?.name; if(mRef) recuMap[norm(mRef)]=(recuMap[norm(mRef)]||0)+parseFloat(r.qty||0) }
-      for (const p of pertes) { const mRef=p.matiere_ref||p.item_name; pertesMap[norm(mRef)]=(pertesMap[norm(mRef)]||0)+parseFloat(p.qte||0) }
-
-      const consoTheoMap={}
-      for (const row of consoData) {
-        const k=norm(row.matiere)
-        consoTheoMap[k]={qte:(consoTheoMap[k]?.qte||0)+parseFloat(row.qte_theo||0),cout:(consoTheoMap[k]?.cout||0)+parseFloat(row.cout_theo||0),nom:row.matiere}
-      }
-
-      const keys = new Set([...Object.keys(consoTheoMap), ...Object.keys(invDebutMap), ...Object.keys(invFinMap), ...Object.keys(recuMap), ...Object.keys(pertesMap)])
-      const result=[]
-      for (const k of keys) {
-        const info=mpMap[k]; if(!info) continue
-        const consoTheo = consoTheoMap[k]?.qte||0
-        const stockDebut = invDebutMap[k]??null
-        const stockFin = invFinMap[k]??null
-        const recu = recuMap[k]||0
-        const perdus = pertesMap[k]||0
-        const hasInventaire = stockDebut!==null && stockFin!==null
-        const stockTheoFin = hasInventaire ? stockDebut + recu - consoTheo - perdus : null
-        // Les pertes déclarées sont isolées pour comparer la consommation
-        // opérationnelle réelle à la consommation recette.
-        const consoReelle = hasInventaire ? stockDebut + recu - stockFin - perdus : null
-        const ecart = consoReelle!==null ? consoReelle-consoTheo : null
-        const ecartPct = consoTheo>0 && ecart!==null ? ((ecart/consoTheo)*100).toFixed(1) : null
-        const prixUnit = info.prixUnit||0
-        const coutTheo = consoTheoMap[k]?.cout||consoTheo*prixUnit
-        const coutEcart = ecart!==null ? ecart*prixUnit : null
-
-        result.push({
-          matiere:info.nom||consoTheoMap[k]?.nom||k, unite:info.unite||'', k,
-          stockDebut, recu, consoTheo:parseFloat(consoTheo.toFixed(2)),
-          consoReelle:consoReelle!==null?parseFloat(consoReelle.toFixed(2)):null,
-          perdus, stockTheoFin:stockTheoFin!==null?parseFloat(stockTheoFin.toFixed(2)):null,
-          stockFin, ecart:ecart!==null?parseFloat(ecart.toFixed(2)):null,
-          ecartPct, coutTheo:parseFloat(coutTheo.toFixed(2)),
-          coutEcart:coutEcart!==null?parseFloat(coutEcart.toFixed(2)):null,
-          prixUnit, hasInventaire,
-        })
-      }
+      if (!from || !to || from >= to) throw new Error('Sélectionnez un intervalle entre deux inventaires.')
+      setDateFrom(from); setDateTo(to); setIntervalle({ from, to })
+      const { data, error: varianceError } = await supabase.rpc('get_consumption_variance', { p_from: from, p_to: to })
+      if (varianceError) throw varianceError
+      const result = (data || []).map(row => ({
+        matiere: row.matiere, unite: row.unite || '', k: row.material_key,
+        stockDebut: toNumber(row.stock_debut), recu: toNumber(row.receptions) || 0,
+        perdus: toNumber(row.pertes_declarees) || 0, stockFin: toNumber(row.stock_fin),
+        consoTheo: toNumber(row.conso_theorique) || 0, consoReelle: toNumber(row.conso_reelle),
+        stockTheoFin: toNumber(row.stock_theorique_fin), ecart: toNumber(row.ecart),
+        ecartPct: toNumber(row.ecart_pct), coutTheo: toNumber(row.cout_theorique) || 0,
+        coutEcart: toNumber(row.cout_ecart), prixUnit: toNumber(row.prix_unitaire) || 0,
+        hasInventaire: row.has_inventaire, diagnostic: row.diagnostic,
+      }))
 
       result.sort((a,b)=>{
       if (sortBy==='nom') return a.matiere.localeCompare(b.matiere)
@@ -137,58 +83,44 @@ export default function Ecarts() {
   }
 
   const totalCoutTheo  = rows.reduce((s,r)=>s+(r.coutTheo||0),0)
-  const totalCoutEcart = rows.filter(r=>r.coutEcart!=null).reduce((s,r)=>s+(r.coutEcart||0),0)
+  const totalPertes    = rows.reduce((s,r)=>s+Math.max(r.coutEcart||0,0),0)
+  const totalAnomalies = rows.reduce((s,r)=>s+Math.abs(Math.min(r.coutEcart||0,0)),0)
   const sansInv        = rows.filter(r=>!r.hasInventaire).length
   const avecInv        = rows.filter(r=>r.hasInventaire).length
+  const couverture     = rows.length ? Math.round(avecInv / rows.length * 100) : 0
+  const consoSansRecette = rows.filter(r=>r.diagnostic==='conso_sans_recette').length
 
   async function loadConsoDetail(r) {
     if (consoDetail[r.k] !== undefined || !intervalle) return // déjà chargé (même vide)
     setLoadingDetail(r.matiere)
 
-    // 1er essai: filtre eq exact
-    let { data } = await supabase
-      .from('v_conso_detail')
-      .select('produit, nb_ventes, grammage_unitaire, qte_conso, matiere')
-      .eq('matiere', r.matiere)
-      .gt('date_vente', intervalle.from)
-      .lte('date_vente', intervalle.to)
-
-    // 2ème essai si vide: charger toutes et filtrer côté JS (cas casse différente)
-    if (!data || data.length === 0) {
-      const { data: all } = await supabase
-        .from('v_conso_detail')
-        .select('produit, nb_ventes, grammage_unitaire, qte_conso, matiere')
-        .gt('date_vente', intervalle.from)
-        .lte('date_vente', intervalle.to)
-      const mNorm = norm(r.matiere)
-      data = (all||[]).filter(row => norm(row.matiere) === mNorm)
+    const { data, error: detailError } = await supabase.rpc('get_consumption_variance_detail', {
+      p_from: intervalle.from, p_to: intervalle.to, p_matiere: r.matiere,
+    })
+    if (detailError) {
+      setError(detailError.message); setLoadingDetail(null); return
     }
-
-    // Agréger par produit
-    const map = {}
-    for (const row of (data||[])) {
-      const key = row.produit
-      if (!map[key]) map[key] = { produit: key, nb_ventes: 0, grammage: parseFloat(row.grammage_unitaire||0), total: 0 }
-      map[key].nb_ventes += parseFloat(row.nb_ventes||0)
-      map[key].total     += parseFloat(row.qte_conso||0)
-    }
-    const sorted = Object.values(map).sort((a,b)=>b.total-a.total)
+    const sorted = (data || []).map(row => ({
+      produit: row.produit, nb_ventes: toNumber(row.nb_ventes) || 0,
+      grammage: toNumber(row.grammage_unitaire) || 0, total: toNumber(row.qte_conso) || 0,
+    }))
     setConsoDetail(prev => ({ ...prev, [r.k]: sorted }))
     setLoadingDetail(null)
   }
 
   function ecartColor(r) {
     if (!r.hasInventaire||r.ecart===null) return null
+    if (r.diagnostic==='conso_sans_recette') return {bg:'#F3E8FF',color:'#6B21A8'}
     const p=parseFloat(r.ecartPct||0)
     if (Math.abs(p)<5) return {bg:'#EAF3DE',color:'#3B6D11'}
     if (p>0) return {bg:'#FCEBEB',color:'#A32D2D'}
-    return {bg:'#EAF3DE',color:'#3B6D11'}
+    return {bg:'#FEF3DC',color:'#8A5200'}
   }
 
   function downloadCSV() {
-    const header=['Matière','Unité','Stock début','Réceptions','Pertes','Stock fin','Conso théo.','Conso réelle nette','Surconsommation','Écart %','Coût théo.','Coût écart']
-    const data=rows.map(r=>[r.matiere,r.unite,r.stockDebut??'',r.recu,r.perdus,r.stockFin??'',r.consoTheo,r.consoReelle??'',r.ecart??'',r.ecartPct??'',r.coutTheo,r.coutEcart??''])
-    const csv=[header,...data].map(row=>row.map(c=>'"'+String(c)+'"').join(';')).join('\n')
+    const header=['Matière','Diagnostic','Unité','Stock début','Réceptions','Pertes','Stock fin','Conso théo.','Conso réelle nette','Écart','Écart %','Coût théo.','Coût écart']
+    const data=rows.map(r=>[r.matiere,r.diagnostic,r.unite,r.stockDebut??'',r.recu,r.perdus,r.stockFin??'',r.consoTheo,r.consoReelle??'',r.ecart??'',r.ecartPct??'',r.coutTheo,r.coutEcart??''])
+    const csv=[header,...data].map(row=>row.map(c=>'"'+String(c).replaceAll('"','""')+'"').join(';')).join('\n')
     const a=document.createElement('a')
     a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}))
     a.download=`ecarts_${dateFrom}_${dateTo}.csv`; a.click()
@@ -197,9 +129,11 @@ export default function Ecarts() {
   function downloadPDF() {
     const rowsHTML = rows.map(r => {
       const col = ecartColor(r)
-      const ecartBadge = r.hasInventaire && r.ecartPct!=null
-        ? `<span style="background:${col?.bg};color:${col?.color};padding:2px 8px;border-radius:10px;font-weight:500;font-size:11px">${parseFloat(r.ecartPct)>0?'+':''}${r.ecartPct}%</span>`
-        : `<span style="color:#888;font-size:11px">Sans inv.</span>`
+      const ecartBadge = r.diagnostic === 'conso_sans_recette'
+        ? `<span style="background:#F3E8FF;color:#6B21A8;padding:2px 8px;border-radius:10px;font-weight:500;font-size:11px">Sans recette</span>`
+        : r.hasInventaire && r.ecartPct!=null
+          ? `<span style="background:${col?.bg};color:${col?.color};padding:2px 8px;border-radius:10px;font-weight:500;font-size:11px">${parseFloat(r.ecartPct)>0?'+':''}${r.ecartPct}%</span>`
+          : `<span style="color:#888;font-size:11px">Sans inv.</span>`
       return `<tr>
         <td style="font-weight:500;padding:6px 8px">${r.matiere}</td>
         <td style="text-align:center;padding:6px 8px">${r.stockDebut??'—'}</td>
@@ -209,7 +143,7 @@ export default function Ecarts() {
         <td style="text-align:center;padding:6px 8px;font-weight:500">${fN(r.consoReelle,0)}</td>
         <td style="text-align:center;padding:6px 8px">${ecartBadge}</td>
         <td style="text-align:right;padding:6px 8px">${fDT(r.coutTheo)}</td>
-        <td style="text-align:right;padding:6px 8px;color:${r.coutEcart>0?'#A32D2D':r.coutEcart<0?'#3B6D11':'#888'}">${r.coutEcart!=null?fDT(r.coutEcart):'—'}</td>
+        <td style="text-align:right;padding:6px 8px;color:${r.coutEcart>0?'#A32D2D':r.coutEcart<0?'#8A5200':'#888'}">${r.coutEcart!=null?fDT(r.coutEcart):'—'}</td>
       </tr>`
     }).join('')
 
@@ -232,10 +166,10 @@ tr:nth-child(even) td{background:#fafafa}
 <h2>Écarts stock — ${dateFrom} → ${dateTo}</h2>
 <div class="sub">Généré le ${format(new Date(),'d MMMM yyyy',{locale:fr})}</div>
 <div class="kpi">
-  <div><strong>${rows.length}</strong><span>Matières</span></div>
-  <div><strong>${fDT(totalCoutTheo)}</strong><span>Coût théo.</span></div>
-  <div><strong style="color:${totalCoutEcart>=0?'#3B6D11':'#A32D2D'}">${fDT(totalCoutEcart)}</strong><span>Coût écart</span></div>
-  <div><strong>${avecInv}/${rows.length}</strong><span>Avec inventaire</span></div>
+  <div><strong>${fDT(totalCoutTheo)}</strong><span>Coût théorique</span></div>
+  <div><strong style="color:#A32D2D">${fDT(totalPertes)}</strong><span>Surconsommation</span></div>
+  <div><strong style="color:#8A5200">${fDT(totalAnomalies)}</strong><span>Sous-conso. à vérifier</span></div>
+  <div><strong>${couverture}%</strong><span>Couverture inventaire</span></div>
 </div>
 <table>
 <thead><tr>
@@ -261,19 +195,16 @@ tr:nth-child(even) td{background:#fafafa}
 
         {/* FILTRES */}
         <div className="card" style={{padding:'0.75rem 1rem',marginBottom:'1rem'}}>
+          <div style={{fontSize:'0.68rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)',marginBottom:6}}>Intervalles entre inventaires</div>
           <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:'0.6rem'}}>
-            {PERIODES.map(p=>(
+            {periods.map(p=>(
               <button key={p.label} className={`btn btn-sm ${dateFrom===p.from&&dateTo===p.to?'btn-primary':'btn-outline'}`}
-                onClick={()=>{setDateFrom(p.from);setDateTo(p.to)}}>{p.label}</button>
+                disabled={loading} onClick={()=>charger(p.from,p.to)}>{p.label}</button>
             ))}
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginBottom:'0.6rem'}}>
-            <input className="form-input" type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{fontSize:'0.82rem'}}/>
-            <input className="form-input" type="date" value={dateTo}   onChange={e=>setDateTo(e.target.value)}   style={{fontSize:'0.82rem'}}/>
-          </div>
           <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-            <button className="btn btn-primary btn-sm" disabled={loading} onClick={charger}>
-              {loading?<Spinner size={14}/>:'↻'} Calculer
+            <button className="btn btn-outline btn-sm" disabled={loading||!dateFrom} onClick={()=>charger()}>
+              {loading?<Spinner size={14}/>:'↻'} Actualiser
             </button>
             <div style={{display:'flex',gap:4,marginLeft:'auto'}}>
               {[['ecart_abs','Écart'],['cout','Coût'],['nom','Nom']].map(([s,l])=>(
@@ -293,7 +224,7 @@ tr:nth-child(even) td{background:#fafafa}
 
         {intervalle&&loaded&&(
           <div style={{background:'#E6F1FB',border:'1.5px solid #378ADD',borderRadius:'var(--radius-lg)',padding:'0.75rem 1rem',marginBottom:'1rem',fontSize:'0.78rem',color:'#185FA5'}}>
-            Période réellement comparée : <strong>{intervalle.from} → {intervalle.to}</strong>, entre les deux inventaires qui encadrent la sélection.
+            Période comparée : <strong>{intervalle.from} → {intervalle.to}</strong>, entre deux inventaires réalisés.
           </div>
         )}
 
@@ -303,16 +234,23 @@ tr:nth-child(even) td{background:#fafafa}
           </div>
         )}
 
+        {consoSansRecette>0&&loaded&&(
+          <div style={{background:'#F3E8FF',border:'1.5px solid #9333EA',borderRadius:'var(--radius-lg)',padding:'0.75rem 1rem',marginBottom:'1rem',fontSize:'0.78rem',color:'#6B21A8'}}>
+            <strong>{consoSansRecette} matière{consoSansRecette>1?'s':''} consommée{consoSansRecette>1?'s':''} sans consommation théorique</strong> — vérifier les recettes, unités ou saisies d'inventaire.
+          </div>
+        )}
+
         {loading&&<div style={{display:'flex',justifyContent:'center',padding:'3rem'}}><Spinner size={28}/></div>}
 
         {loaded&&!loading&&(
           <>
             {/* KPIs */}
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:'1rem'}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:8,marginBottom:'1rem'}}>
               {[
-                {label:'Matières',   value:rows.length,            color:'var(--outside-dark)'},
-                {label:'Coût théo.', value:fDT(totalCoutTheo),     color:'var(--outside-green)'},
-                {label:'Coût écart', value:fDT(totalCoutEcart),    color:totalCoutEcart>0?'var(--danger)':totalCoutEcart<0?'var(--outside-green)':'var(--muted)'},
+                {label:'Coût théorique', value:fDT(totalCoutTheo), color:'var(--outside-dark)'},
+                {label:'Surconsommation', value:fDT(totalPertes), color:'var(--danger)'},
+                {label:'Sous-conso. à vérifier', value:fDT(totalAnomalies), color:'var(--outside-amber)'},
+                {label:'Couverture inventaire', value:`${couverture}%`, color:couverture===100?'var(--outside-green)':'var(--outside-amber)'},
               ].map(k=>(
                 <div key={k.label} className="card" style={{padding:'0.75rem'}}>
                   <div style={{fontFamily:'var(--font-display)',fontSize:'0.9rem',color:k.color,fontWeight:400}}>{k.value}</div>
@@ -349,7 +287,9 @@ tr:nth-child(even) td{background:#fafafa}
                       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
                         <div style={{fontWeight:700,fontSize:'0.88rem',flex:1,paddingRight:8}}>{r.matiere}</div>
                         <div style={{display:'flex',alignItems:'center',gap:8}}>
-                          {r.hasInventaire&&r.ecartPct!=null?(
+                          {r.diagnostic==='conso_sans_recette'?(
+                            <div style={{fontWeight:700,fontSize:'0.72rem',color:col?.color,background:col?.bg,borderRadius:6,padding:'2px 8px'}}>Sans recette</div>
+                          ):r.hasInventaire&&r.ecartPct!=null?(
                             <div style={{fontWeight:700,fontSize:'0.82rem',color:col?.color,background:col?.bg,borderRadius:6,padding:'2px 8px'}}>
                               {parseFloat(r.ecartPct)>0?'+':''}{r.ecartPct}%
                             </div>
@@ -361,7 +301,7 @@ tr:nth-child(even) td{background:#fafafa}
                         <span>Théo: <strong style={{color:'var(--outside-dark)'}}>{fN(r.consoTheo,0)} {r.unite}</strong></span>
                         {r.hasInventaire&&<span>Réelle: <strong style={{color:'var(--outside-dark)'}}>{fN(r.consoReelle,0)} {r.unite}</strong></span>}
                         {r.hasInventaire&&<span>Écart conso: <strong style={{color:col?.color}}>{r.ecart>0?'+':''}{fN(r.ecart,0)} {r.unite}</strong></span>}
-                        <span style={{marginLeft:'auto'}}>{fDT(r.coutTheo)}{r.coutEcart!=null&&Math.abs(r.coutEcart)>0.01&&<span style={{color:r.coutEcart>0?'var(--danger)':'var(--outside-green)',fontWeight:700,marginLeft:4}}>({r.coutEcart>0?'+':''}{fDT(r.coutEcart)})</span>}</span>
+                        <span style={{marginLeft:'auto'}}>{fDT(r.coutTheo)}{r.coutEcart!=null&&Math.abs(r.coutEcart)>0.01&&<span style={{color:r.coutEcart>0?'var(--danger)':'var(--outside-amber)',fontWeight:700,marginLeft:4}}>({r.coutEcart>0?'+':''}{fDT(r.coutEcart)})</span>}</span>
                       </div>
                     </div>
 
