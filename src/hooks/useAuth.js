@@ -6,6 +6,7 @@ const AuthContext = createContext({})
 // Helper — true if role has at least the requested level
 // admin > manager > barista
 export function hasRole(profile, minRole) {
+  if (Array.isArray(minRole)) return minRole.includes(profile?.role)
   const levels = { barista: 0, manager: 1, admin: 2 }
   const userLevel = levels[profile?.role] ?? -1
   const required = levels[minRole] ?? 0
@@ -43,38 +44,24 @@ export function AuthProvider({ children }) {
   }
 
   async function signUpWithPin(name, role, pin) {
-    const slug      = name.toLowerCase().replace(/[^a-z0-9]/g, '')
-    const rand      = Math.random().toString(36).slice(2, 6)
-    const fakeEmail = `${slug}.${rand}@outside.invalid`
-
-    // Créer le compte avec un mot de passe temporaire
-    const tempPassword = `TEMP_${rand}_${Date.now()}`
-    const { data, error } = await supabase.auth.signUp({
-      email:    fakeEmail,
-      password: tempPassword,
+    const { data, error } = await supabase.functions.invoke('manage-team-user', {
+      body: { action: 'create', name, role, pin },
     })
-    if (error) return { error }
+    return { user: data?.user || null, error: error || (data?.error ? new Error(data.error) : null) }
+  }
 
-    if (data.user) {
-      // Mot de passe final basé sur l'UUID réel de l'utilisateur
-      const realPassword = `PIN_${pin}_${data.user.id.slice(0, 8)}`
+  async function resetUserPin(userId, pin) {
+    const { data, error } = await supabase.functions.invoke('manage-team-user', {
+      body: { action: 'reset-pin', userId, pin },
+    })
+    return { data, error: error || (data?.error ? new Error(data.error) : null) }
+  }
 
-      // Mettre à jour le mot de passe avec l'UUID réel
-      await supabase.auth.updateUser({ password: realPassword })
-
-      const colors = ['#C8956C','#4A7C59','#3D5A8A','#8B6B8A','#D4A853','#B04A3A']
-      const color  = colors[Math.floor(Math.random() * colors.length)]
-
-      await supabase.from('profiles').insert({
-        id:           data.user.id,
-        name,
-        role,
-        avatar_color: color,
-        fake_email:   fakeEmail,
-        pin_code:     pin,
-      })
-    }
-    return { error: null }
+  async function deleteTeamUser(userId) {
+    const { data, error } = await supabase.functions.invoke('manage-team-user', {
+      body: { action: 'delete', userId },
+    })
+    return { data, error: error || (data?.error ? new Error(data.error) : null) }
   }
 
   async function signOut() {
@@ -82,7 +69,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, signUpWithPin, fetchProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, signUpWithPin, resetUserPin, deleteTeamUser, fetchProfile }}>
       {children}
     </AuthContext.Provider>
   )

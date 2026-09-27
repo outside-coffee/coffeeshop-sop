@@ -771,24 +771,23 @@ function ProduitsTab() {
       if (data) setProduits(prev => [...prev, data])
     }
 
-    // Sauvegarder la composition
+    // Sauvegarder la composition dans une transaction côté base.
     if (compo.length > 0) {
-      // Supprimer les lignes existantes puis réinsérer
-      await supabase.from('composition_produit').delete()
-        .eq('nom_produit', nomProduit).eq('type', 'produit fini')
       const toInsert = compo
         .filter(l => l.matiere && l.quantite_m)
         .map(({ _new, id, ...l }) => ({
-          nom_produit: nomProduit,
-          type:        'produit fini',
           matiere:     l.matiere,
           quantite_m:  parseFloat(l.quantite_m),
           unite:       l.unite || 'g',
           prix_achat:  parseFloat(l.prix_achat || 0),
         }))
       if (toInsert.length > 0) {
-        const { error: compoErr } = await supabase.from('composition_produit').insert(toInsert)
-        if (compoErr) console.error('Erreur composition:', compoErr)
+        const { error: compoErr } = await supabase.rpc('replace_product_recipe', {
+          p_old_name: edit?.nom_produit || nomProduit,
+          p_new_name: nomProduit,
+          p_lines: toInsert,
+        })
+        if (compoErr) { alert('Erreur composition: '+compoErr.message); setSaving(false); return }
       }
     }
 

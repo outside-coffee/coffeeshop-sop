@@ -1,0 +1,4 @@
+project_id = "ccyvqumryvthqwgmesxd"
+
+[functions.manage-team-user]
+verify_jwt = true
