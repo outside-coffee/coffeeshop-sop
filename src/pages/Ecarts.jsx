@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { Spinner } from '../components/UI'
-import { format } from 'date-fns'
+import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Download, ChevronDown, ChevronUp } from 'lucide-react'
 
@@ -12,6 +12,9 @@ const toNumber = value => value == null ? null : parseFloat(value)
 export default function Ecarts() {
   const [dateFrom,    setDateFrom]    = useState('')
   const [dateTo,      setDateTo]      = useState('')
+  const [requestedFrom, setRequestedFrom] = useState('')
+  const [requestedTo,   setRequestedTo]   = useState('')
+  const [inventoryDates, setInventoryDates] = useState([])
   const [periods,     setPeriods]     = useState([])
   const [loading,     setLoading]     = useState(false)
   const [rows,        setRows]        = useState([])
@@ -36,22 +39,26 @@ export default function Ecarts() {
       setError(datesError.message); setLoading(false); return
     }
     const dates = [...new Set((data || []).map(row => row.date_inventaire))]
+    setInventoryDates(dates)
     const available = dates.slice(0, 7).map((to, index) => ({
       from: dates[index + 1], to,
       label: index === 0 ? 'Dernier inventaire' : `${dates[index + 1]} → ${to}`,
     })).filter(period => period.from)
     setPeriods(available)
-    if (available[0]) await charger(available[0].from, available[0].to)
+    if (available[0]) {
+      setRequestedFrom(available[0].from); setRequestedTo(available[0].to)
+      await charger(available[0].from, available[0].to, { from: available[0].from, to: available[0].to })
+    }
     else { setError('Deux inventaires distincts sont nécessaires pour calculer les écarts.'); setLoading(false) }
   }
 
-  async function charger(from = dateFrom, to = dateTo) {
+  async function charger(from = dateFrom, to = dateTo, requested = { from, to }) {
     setLoading(true); setLoaded(false); setError(''); setIntervalle(null)
     setExpanded(null); setConsoDetail({})
 
     try {
       if (!from || !to || from >= to) throw new Error('Sélectionnez un intervalle entre deux inventaires.')
-      setDateFrom(from); setDateTo(to); setIntervalle({ from, to })
+      setDateFrom(from); setDateTo(to); setIntervalle({ from, to, requestedFrom: requested.from, requestedTo: requested.to })
       const { data, error: varianceError } = await supabase.rpc('get_consumption_variance', { p_from: from, p_to: to })
       if (varianceError) throw varianceError
       const result = (data || []).map(row => ({
@@ -80,6 +87,37 @@ export default function Ecarts() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function calculerPeriode(from = requestedFrom, to = requestedTo) {
+    setError('')
+    if (!from || !to || from > to) {
+      setError('Sélectionnez une période valide.')
+      return
+    }
+
+    const opening = inventoryDates.find(date => date <= from)
+    const closing = inventoryDates.find(date => date <= to && date > opening)
+    if (!opening) {
+      setError(`Aucun inventaire disponible avant le ${from}.`)
+      return
+    }
+    if (!closing) {
+      setError(`Aucun inventaire de clôture disponible entre le ${from} et le ${to}. Le calcul sera possible après le prochain inventaire.`)
+      return
+    }
+
+    setRequestedFrom(from); setRequestedTo(to)
+    await charger(opening, closing, { from, to })
+  }
+
+  function appliquerRaccourci(type) {
+    const today = new Date()
+    const reference = type === 'previous' ? subMonths(today, 1) : today
+    const from = format(startOfMonth(reference), 'yyyy-MM-dd')
+    const to = format(type === 'previous' ? endOfMonth(reference) : today, 'yyyy-MM-dd')
+    setRequestedFrom(from); setRequestedTo(to)
+    calculerPeriode(from, to)
   }
 
   const totalCoutTheo  = rows.reduce((s,r)=>s+(r.coutTheo||0),0)
@@ -195,15 +233,33 @@ tr:nth-child(even) td{background:#fafafa}
 
         {/* FILTRES */}
         <div className="card" style={{padding:'0.75rem 1rem',marginBottom:'1rem'}}>
-          <div style={{fontSize:'0.68rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)',marginBottom:6}}>Intervalles entre inventaires</div>
+          <div style={{fontSize:'0.68rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)',marginBottom:6}}>Période à analyser</div>
+          <div style={{display:'flex',gap:6,alignItems:'flex-end',flexWrap:'wrap',marginBottom:'0.75rem'}}>
+            <label style={{fontSize:'0.68rem',color:'var(--muted)'}}>
+              Du
+              <input type="date" value={requestedFrom} onChange={e=>setRequestedFrom(e.target.value)}
+                style={{display:'block',marginTop:3,padding:'0.4rem',border:'1px solid var(--outside-cream2)',borderRadius:6}} />
+            </label>
+            <label style={{fontSize:'0.68rem',color:'var(--muted)'}}>
+              Au
+              <input type="date" value={requestedTo} onChange={e=>setRequestedTo(e.target.value)}
+                style={{display:'block',marginTop:3,padding:'0.4rem',border:'1px solid var(--outside-cream2)',borderRadius:6}} />
+            </label>
+            <button className="btn btn-primary btn-sm" disabled={loading||!requestedFrom||!requestedTo} onClick={()=>calculerPeriode()}>
+              {loading?<Spinner size={14}/>:null} Calculer
+            </button>
+            <button className="btn btn-outline btn-sm" disabled={loading} onClick={()=>appliquerRaccourci('current')}>Ce mois</button>
+            <button className="btn btn-outline btn-sm" disabled={loading} onClick={()=>appliquerRaccourci('previous')}>M-1</button>
+          </div>
+          <div style={{fontSize:'0.68rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)',marginBottom:6}}>Intervalles récents disponibles</div>
           <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:'0.6rem'}}>
             {periods.map(p=>(
               <button key={p.label} className={`btn btn-sm ${dateFrom===p.from&&dateTo===p.to?'btn-primary':'btn-outline'}`}
-                disabled={loading} onClick={()=>charger(p.from,p.to)}>{p.label}</button>
+                disabled={loading} onClick={()=>{setRequestedFrom(p.from);setRequestedTo(p.to);charger(p.from,p.to,{from:p.from,to:p.to})}}>{p.label}</button>
             ))}
           </div>
           <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
-            <button className="btn btn-outline btn-sm" disabled={loading||!dateFrom} onClick={()=>charger()}>
+            <button className="btn btn-outline btn-sm" disabled={loading||!requestedFrom||!requestedTo} onClick={()=>calculerPeriode()}>
               {loading?<Spinner size={14}/>:'↻'} Actualiser
             </button>
             <div style={{display:'flex',gap:4,marginLeft:'auto'}}>
@@ -224,7 +280,8 @@ tr:nth-child(even) td{background:#fafafa}
 
         {intervalle&&loaded&&(
           <div style={{background:'#E6F1FB',border:'1.5px solid #378ADD',borderRadius:'var(--radius-lg)',padding:'0.75rem 1rem',marginBottom:'1rem',fontSize:'0.78rem',color:'#185FA5'}}>
-            Période comparée : <strong>{intervalle.from} → {intervalle.to}</strong>, entre deux inventaires réalisés.
+            Période demandée : <strong>{intervalle.requestedFrom} → {intervalle.requestedTo}</strong><br/>
+            Inventaires utilisés pour le calcul : <strong>{intervalle.from} → {intervalle.to}</strong>.
           </div>
         )}
 
