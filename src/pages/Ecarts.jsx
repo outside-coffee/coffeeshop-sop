@@ -15,7 +15,6 @@ export default function Ecarts() {
   const [requestedFrom, setRequestedFrom] = useState('')
   const [requestedTo,   setRequestedTo]   = useState('')
   const [inventoryDates, setInventoryDates] = useState([])
-  const [periods,     setPeriods]     = useState([])
   const [loading,     setLoading]     = useState(false)
   const [rows,        setRows]        = useState([])
   const [loaded,      setLoaded]      = useState(false)
@@ -40,11 +39,9 @@ export default function Ecarts() {
     }
     const dates = [...new Set((data || []).map(row => row.date_inventaire))]
     setInventoryDates(dates)
-    const available = dates.slice(0, 7).map((to, index) => ({
+    const available = dates.slice(0, 2).map((to, index) => ({
       from: dates[index + 1], to,
-      label: index === 0 ? 'Dernier inventaire' : `${dates[index + 1]} → ${to}`,
     })).filter(period => period.from)
-    setPeriods(available)
     if (available[0]) {
       setRequestedFrom(available[0].from); setRequestedTo(available[0].to)
       await charger(available[0].from, available[0].to, { from: available[0].from, to: available[0].to })
@@ -250,13 +247,6 @@ tr:nth-child(even) td{background:#fafafa}
             </button>
             <button className="btn btn-outline btn-sm" disabled={loading} onClick={()=>appliquerRaccourci('current')}>Ce mois</button>
             <button className="btn btn-outline btn-sm" disabled={loading} onClick={()=>appliquerRaccourci('previous')}>M-1</button>
-          </div>
-          <div style={{fontSize:'0.68rem',fontWeight:800,textTransform:'uppercase',color:'var(--muted)',marginBottom:6}}>Intervalles récents disponibles</div>
-          <div style={{display:'flex',gap:5,flexWrap:'wrap',marginBottom:'0.6rem'}}>
-            {periods.map(p=>(
-              <button key={p.label} className={`btn btn-sm ${dateFrom===p.from&&dateTo===p.to?'btn-primary':'btn-outline'}`}
-                disabled={loading} onClick={()=>{setRequestedFrom(p.from);setRequestedTo(p.to);charger(p.from,p.to,{from:p.from,to:p.to})}}>{p.label}</button>
-            ))}
           </div>
           <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
             <button className="btn btn-outline btn-sm" disabled={loading||!requestedFrom||!requestedTo} onClick={()=>calculerPeriode()}>
