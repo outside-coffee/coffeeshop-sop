@@ -286,17 +286,22 @@ function TabMouvements({ isManager, profile }) {
       if (uploadErr) { alert('Erreur upload facture: '+uploadErr.message) }
       if (data) facture_url = data.path
     }
-    const { error: mvtError } = await supabase.from('stock_movements').insert({item_id:item.id,qty:parseFloat(qty),type:'reception',note:note||null,fournisseur:fournisseur||null,facture_url,done_by:profile?.id,created_at:form.date_reception+'T12:00:00',prix:parseFloat(prix||0)})
+    const { error: mvtError } = await supabase.rpc('record_stock_reception', {
+      p_item_id:item.id, p_qty:parseFloat(qty), p_prix:parseFloat(prix||0),
+      p_fournisseur:fournisseur||null, p_note:note||null, p_facture_url:facture_url,
+      p_created_at:form.date_reception+'T12:00:00',
+    })
     if (mvtError) { alert('Erreur mouvement: '+mvtError.message); setSaving(false); return }
-    const { error: siError } = await supabase.from('stock_items').update({current_qty:parseFloat(item.current_qty||0)+parseFloat(qty),updated_at:new Date().toISOString()}).eq('id',item.id)
-    if (siError) { alert('Erreur stock: '+siError.message); setSaving(false); return }
     await loadData(); setSaving(false); setModal(null)
   }
 
   async function savePerte({item,qte,motif,motif_detail,date_perte}) {
     setSaving(true)
-    await supabase.from('stock_pertes').insert({item_name:item.name,matiere_ref:item.matiere_ref,qte:parseFloat(qte),unite:item.unit,motif,motif_detail:motif_detail||null,date_perte:date_perte||format(new Date(),'yyyy-MM-dd')})
-    await supabase.from('stock_items').update({current_qty:Math.max(0,parseFloat(item.current_qty||0)-parseFloat(qte)),updated_at:new Date().toISOString()}).eq('id',item.id)
+    const { error } = await supabase.rpc('record_stock_loss', {
+      p_item_id:item.id, p_qty:parseFloat(qte), p_motif:motif,
+      p_motif_detail:motif_detail||null, p_date_perte:date_perte||format(new Date(),'yyyy-MM-dd'),
+    })
+    if (error) { alert('Erreur perte: '+error.message); setSaving(false); return }
     await loadData(); setSaving(false); setModal(null)
   }
 
@@ -888,25 +893,23 @@ function TabConsommables({ isManager, profile }) {
       if (uploadErr) alert('Erreur upload: '+uploadErr.message)
       if (data) facture_url = data.path
     }
-    await supabase.from('stock_movements').insert({
-      item_id: item.id, qty: parseFloat(qty), type: 'reception',
-      note: note||null, fournisseur: fournisseur||null, facture_url,
-      done_by: profile?.id, prix: parseFloat(prix||0),
-      created_at: form.date_reception+'T12:00:00',
+    const { error } = await supabase.rpc('record_stock_reception', {
+      p_item_id:item.id, p_qty:parseFloat(qty), p_prix:parseFloat(prix||0),
+      p_fournisseur:fournisseur||null, p_note:note||null, p_facture_url:facture_url,
+      p_created_at:form.date_reception+'T12:00:00',
     })
-    await supabase.from('stock_items').update({ current_qty: parseFloat(item.current_qty||0)+parseFloat(qty) }).eq('id', item.id)
+    if (error) { alert('Erreur réception: '+error.message); setSaving(false); return }
     setSaving(false); setModal(null); load()
   }
 
   async function savePerte(form) {
     setSaving(true)
     const { item, qte, motif, motif_detail, date_perte } = form
-    await supabase.from('stock_pertes').insert({
-      item_name: item.name, matiere_ref: item.matiere_ref, qte: parseFloat(qte),
-      unite: item.unit, motif, motif_detail: motif_detail||null,
-      date_perte, done_by: profile?.id,
+    const { error } = await supabase.rpc('record_stock_loss', {
+      p_item_id:item.id, p_qty:parseFloat(qte), p_motif:motif,
+      p_motif_detail:motif_detail||null, p_date_perte:date_perte||format(new Date(),'yyyy-MM-dd'),
     })
-    await supabase.from('stock_items').update({ current_qty: Math.max(0, parseFloat(item.current_qty||0)-parseFloat(qte)) }).eq('id', item.id)
+    if (error) { alert('Erreur perte: '+error.message); setSaving(false); return }
     setSaving(false); setModal(null); load()
   }
 

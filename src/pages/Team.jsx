@@ -30,7 +30,7 @@ const PALETTE = [
 ]
 
 export default function Team() {
-  const { profile, signUpWithPin } = useAuth()
+  const { profile, signUpWithPin, resetUserPin, deleteTeamUser } = useAuth()
   const isAdmin   = hasRole(profile, 'admin')
   const isManager = hasRole(profile, 'manager')
 
@@ -103,13 +103,15 @@ export default function Team() {
 
   async function deleteMember(id) {
     if (!window.confirm('Supprimer définitivement ce membre ?')) return
-    await supabase.from('profiles').delete().eq('id', id)
+    const { error } = await deleteTeamUser(id)
+    if (error) { alert('Erreur: ' + error.message); return }
     setMembers(m => m.filter(x => x.id !== id))
   }
 
   async function resetPin(member) {
     const newPin = generatePin()
-    await supabase.from('profiles').update({ pin_code: newPin }).eq('id', member.id)
+    const { error } = await resetUserPin(member.id, newPin)
+    if (error) { alert('Erreur: ' + error.message); return }
     setMembers(m => m.map(x => x.id === member.id ? { ...x, pin_code: newPin } : x))
     setCreated({ name: member.name, pin: newPin, role: member.role, isReset: true })
   }

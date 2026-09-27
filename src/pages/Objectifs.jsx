@@ -12,7 +12,7 @@ const DATE_CHG_TABLE = new Date('2026-03-19')
 
 export default function Objectifs() {
   const { profile } = useAuth()
-  const isManager = hasRole(profile, ['admin','manager'])
+  const isManager = hasRole(profile, 'manager')
 
   const [period, setPeriod] = useState(format(new Date(),'yyyy-MM'))
   const [loading, setLoading] = useState(true)

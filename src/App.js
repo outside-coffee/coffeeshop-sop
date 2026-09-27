@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import './index.css'
-import { AuthProvider, useAuth } from './hooks/useAuth'
+import { AuthProvider, useAuth, hasRole } from './hooks/useAuth'
 import { ToastContainer } from './components/UI'
 import Sidebar from './components/Sidebar'
 import LoginPage from './pages/Login'
@@ -46,21 +46,28 @@ function ProtectedLayout() {
           <Route path="/stock" element={<Stock />} />
           <Route path="/recettes" element={<Recipes />} />
           <Route path="/standards" element={<Standards />} />
-          <Route path="/equipe" element={<Team />} />
-          <Route path="/ecarts" element={<Ecarts />} />
-          <Route path="/checklist-admin" element={<ChecklistAdmin />} />
-          <Route path="/admin-tasks" element={<AdminTasks />} />
-          <Route path="/staff" element={<Staff />} />
-          <Route path="/factures" element={<Factures />} />
-          <Route path="/finance" element={<Finance />} />
-          <Route path="/catalogue" element={<Catalogue />} />
-          <Route path="/performance" element={<Performance />} />
-          <Route path="/objectifs" element={<Objectifs />} />
+          <Route path="/equipe" element={<RequireRole minRole="admin"><Team /></RequireRole>} />
+          <Route path="/ecarts" element={<RequireRole minRole="manager"><Ecarts /></RequireRole>} />
+          <Route path="/checklist-admin" element={<RequireRole minRole="admin"><ChecklistAdmin /></RequireRole>} />
+          <Route path="/admin-tasks" element={<RequireRole minRole="manager"><AdminTasks /></RequireRole>} />
+          <Route path="/staff" element={<RequireRole minRole="manager"><Staff /></RequireRole>} />
+          <Route path="/factures" element={<RequireRole minRole="manager"><Factures /></RequireRole>} />
+          <Route path="/finance" element={<RequireRole minRole="manager"><Finance /></RequireRole>} />
+          <Route path="/catalogue" element={<RequireRole minRole="manager"><Catalogue /></RequireRole>} />
+          <Route path="/performance" element={<RequireRole minRole="manager"><Performance /></RequireRole>} />
+          <Route path="/objectifs" element={<RequireRole minRole="manager"><Objectifs /></RequireRole>} />
         </Routes>
       </main>
       <ToastContainer />
     </div>
   )
+}
+
+function RequireRole({ minRole, children }) {
+  const { profile, loading } = useAuth()
+  if (loading) return <Spinner size={32} />
+  if (!hasRole(profile, minRole)) return <Navigate to="/" replace />
+  return children
 }
 
 function AppRoutes() {
