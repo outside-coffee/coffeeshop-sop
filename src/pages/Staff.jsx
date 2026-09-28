@@ -130,14 +130,10 @@ export default function Staff() {
   useEffect(() => { loadTeam() }, [])
 
   async function loadTeam() {
-    const { data } = await supabase.from('profiles')
-      .select('id, name, prenom, nom, role, role_operationnel, planning_color, avatar_color, actif')
-      .eq('actif', true)
-      .neq('role', 'admin')
-      .order('role').order('name')
+    const { data } = await supabase.rpc('list_staff_profiles')
     // Normaliser en format TEAM
     const ROLE_ORDER = ['manager','barista_lead','barista','service_crew','support_crew','femme_menage']
-    const sorted = (data || []).sort((a,b) => {
+    const sorted = (data || []).filter(m => m.actif && m.role !== 'admin').sort((a,b) => {
       const ra = ROLE_ORDER.indexOf(a.role_operationnel || a.role)
       const rb = ROLE_ORDER.indexOf(b.role_operationnel || b.role)
       return ra - rb
@@ -558,18 +554,18 @@ function PlanningTab() {
   useEffect(() => { loadTeam() }, [])
 
   async function loadTeam() {
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, name, planning_color, is_planning_member')
-      .eq('is_planning_member', true)
-      .order('name')
-    setTeamMembers((profiles || []).map(p => ({ id: p.id, name: p.name, color: p.planning_color || '#999' })))
+    const { data: profiles } = await supabase.rpc('list_staff_profiles')
+    setTeamMembers((profiles || []).filter(p => p.is_planning_member && p.actif).map(p => ({ id: p.id, name: p.name, color: p.planning_color || '#999' })))
   }
 
   async function updateColor(name, color) {
     const member = teamMembers.find(m => m.name === name)
     if (member) {
-      await supabase.from('profiles').update({ planning_color: color }).eq('id', member.id)
+      const { error } = await supabase.rpc('set_staff_planning_color', {
+        target_profile_id: member.id,
+        new_color: color,
+      })
+      if (error) return
       setTeamMembers(prev => prev.map(m => m.name === name ? { ...m, color } : m))
     }
     setColorPicker(null)

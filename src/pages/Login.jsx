@@ -22,10 +22,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     supabase
-      .from('profiles')
-      .select('id, name, role, fake_email, avatar_color')
-      .eq('actif', true)
-      .order('name')
+      .rpc('list_login_profiles')
       .then(({ data }) => {
         setProfiles(data || [])
         setLoadingProfiles(false)
