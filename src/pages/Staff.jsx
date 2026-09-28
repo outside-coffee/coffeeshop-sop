@@ -209,18 +209,18 @@ export default function Staff() {
   return (
     <>
       <div className="page-header">
-        <h1 className="page-title">Organisation & Staff</h1>
-        <p className="page-subtitle">Outside — Équipe & évaluations</p>
+        <h1 className="page-title">Équipe & organisation</h1>
+        <p className="page-subtitle">Organigramme, fiches de poste, planning et évaluations</p>
       </div>
 
       <div className="page-content">
 
         {/* TABS */}
         <div className="tabs" style={{ marginBottom: '1.25rem' }}>
-          <button className={`tab-btn${tab === 'org'      ? ' active' : ''}`} onClick={() => setTab('org')}>Équipe</button>
-          <button className={`tab-btn${tab === 'roles'    ? ' active' : ''}`} onClick={() => setTab('roles')}>Rôles</button>
+          <button className={`tab-btn${tab === 'org'      ? ' active' : ''}`} onClick={() => setTab('org')}>Organigramme</button>
+          <button className={`tab-btn${tab === 'roles'    ? ' active' : ''}`} onClick={() => setTab('roles')}>Fiches de poste</button>
           {isManager && <button className={`tab-btn${tab === 'planning' ? ' active' : ''}`} onClick={() => setTab('planning')}>Planning</button>}
-          {isManager && <button className={`tab-btn${tab === 'eval'     ? ' active' : ''}`} onClick={() => setTab('eval')}>Évaluation</button>}
+          {isManager && <button className={`tab-btn${tab === 'eval'     ? ' active' : ''}`} onClick={() => setTab('eval')}>Évaluations</button>}
         </div>
 
         {/* ── ONGLET ÉQUIPE ──────────────────────────────────────── */}
@@ -283,7 +283,7 @@ export default function Staff() {
               </div>
 
               {/* LISTE DÉTAILLÉE */}
-              <div className="section-label">Fiches membres</div>
+              <div className="section-label">Équipe active</div>
               <div className="card">
                 {TEAM.map((member, idx) => {
                   const rd = getRoleDef(member.role)
@@ -540,20 +540,15 @@ function EvalModal({ member, existing, period, onClose, onSave }) {
 }
 
 // ── PLANNING TAB ──────────────────────────────────────────────────────────
-// TEAM_COLORS et TEAM_NAMES sont maintenant dynamiques (chargés depuis profiles)
-// Valeurs par défaut pour les cas où le chargement est en cours
-const TEAM_COLORS = {}
-const TEAM_NAMES  = []
-
-const SLOTS_MATIN = ['08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00']
+const SLOTS_MATIN = ['07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00']
 const SLOTS_SOIR  = ['16:00','17:00','18:00','19:00','20:00','21:00','22:00','23:00','00:00']
 const ALL_SLOTS   = [...SLOTS_MATIN, ...SLOTS_SOIR]
 
 const ROLES_MAIN = [
-  { value: 'barista_lead',  label: 'Barista Lead',  color: '#C4521A' },
-  { value: 'barista',       label: 'Barista',        color: '#1A5C4A' },
-  { value: 'service_crew',  label: 'Service Crew',   color: '#3D5A8A' },
-  { value: 'support_crew',  label: 'Support Crew',   color: '#8B6B8A' },
+  { value: 'barista_lead',  label: 'Barista Lead',  color: ROLES_DEF.barista_lead.color },
+  { value: 'barista',       label: 'Barista',        color: ROLES_DEF.barista.color },
+  { value: 'service_crew',  label: 'Service Crew',   color: ROLES_DEF.service_crew.color },
+  { value: 'support_crew',  label: 'Support Crew',   color: ROLES_DEF.support_crew.color },
 ]
 const ROLES_EXTRA = [
   { value: 'ouverture',     label: 'Ouverture',      color: '#2E7D32', shift: 'matin' },
@@ -748,7 +743,7 @@ function PlanningTab() {
         }).join('')
         return `<td style="text-align:center;padding:1px 2px">${dots || ''}</td>`
       }).join('')
-      const sep = slot === '16:00' ? `<tr><td colspan="${ncols+1}" style="background:#C4521A;color:white;font-size:10px;font-weight:800;padding:3px 6px;text-transform:uppercase;letter-spacing:0.05em">— Soir</td></tr>` : ''
+      const sep = slot === '16:00' ? `<tr><td colspan="${ncols+1}" style="background:#C4521A;color:white;font-size:10px;font-weight:800;padding:3px 6px;text-transform:uppercase;letter-spacing:0.05em">— Soir · 16:00–00:00</td></tr>` : ''
       return `${sep}<tr><td style="font-size:11px;font-weight:700;color:#555;padding:2px 8px;white-space:nowrap;border-right:2px solid #ddd;background:#fafafa">${slot}</td>${cells}</tr>`
     }).join('')
 
@@ -777,7 +772,7 @@ function PlanningTab() {
 <table>
 <thead><tr><th>Horaire</th>${days.map(d=>`<th>${d}</th>`).join('')}</tr></thead>
 <tbody>
-<tr><td colspan="${ncols+1}" style="background:#1D3A3A;color:#D4892A;font-size:10px;font-weight:800;padding:3px 8px;text-transform:uppercase;letter-spacing:0.05em">— Matin</td></tr>
+<tr><td colspan="${ncols+1}" style="background:#1D3A3A;color:#D4892A;font-size:10px;font-weight:800;padding:3px 8px;text-transform:uppercase;letter-spacing:0.05em">— Matin · 07:00–15:00</td></tr>
 ${slotRows}
 </tbody></table>
 </body></html>`
@@ -937,12 +932,12 @@ ${slotRows}
             </div>
 
             {/* CRÉNEAUX MATIN + SOIR */}
-            <div style={{ fontSize:'0.6rem', fontWeight:800, textTransform:'uppercase', color:'var(--outside-orange)', padding:'4px 0 2px 0' }}>— Matin</div>
+            <div style={{ fontSize:'0.6rem', fontWeight:800, textTransform:'uppercase', color:'var(--outside-orange)', padding:'4px 0 2px 0' }}>— Matin · 07:00–15:00</div>
 
             {ALL_SLOTS.map((slot, slotIdx) => (
               <div key={slot}>
                 {slotIdx === SLOTS_MATIN.length && (
-                  <div style={{ fontSize:'0.6rem', fontWeight:800, textTransform:'uppercase', color:'var(--outside-orange)', padding:'6px 0 2px 0' }}>— Soir</div>
+                  <div style={{ fontSize:'0.6rem', fontWeight:800, textTransform:'uppercase', color:'var(--outside-orange)', padding:'6px 0 2px 0' }}>— Soir · 16:00–00:00</div>
                 )}
                 <div style={{ display:'grid', gridTemplateColumns:'52px repeat(7,1fr)', gap:2, marginBottom:1 }}>
                   <div style={{ fontSize:'0.58rem', color:'var(--muted)', fontWeight:700, display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:5, borderRight:'2px solid var(--outside-cream2)' }}>
@@ -1073,13 +1068,13 @@ ${slotRows}
               })
               const total = dayHours.reduce((a,b)=>a+b,0)
               return (
-                <div key={name} style={{ display:'grid', gridTemplateColumns:'85px 1fr repeat(7,28px)', gap:4, padding:'6px 1rem', borderBottom:idx<TEAM_NAMES.length-1?'1.5px solid var(--outside-cream)':'none', alignItems:'center' }}>
+                <div key={name} style={{ display:'grid', gridTemplateColumns:'85px 1fr repeat(7,28px)', gap:4, padding:'6px 1rem', borderBottom:idx<teamNames.length-1?'1.5px solid var(--outside-cream)':'none', alignItems:'center' }}>
                   <div style={{ display:'flex', alignItems:'center', gap:4 }}>
                     <div style={{ width:8, height:8, borderRadius:'50%', background:tc[name] }}/>
                     <span style={{ fontSize:'0.75rem', fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{name}</span>
                   </div>
                   <div style={{ height:4, background:'var(--outside-cream2)', borderRadius:2, overflow:'hidden' }}>
-                    <div style={{ height:'100%', width:`${total/20*100}%`, background:tc[name], borderRadius:2 }}/>
+                    <div style={{ height:'100%', width:`${Math.min(total/40*100,100)}%`, background:tc[name], borderRadius:2 }}/>
                   </div>
                   {dayHours.map((h,i)=>(
                     <div key={i} style={{ textAlign:'center', fontSize:'0.7rem', fontWeight:h>0?800:400, color:h>0?tc[name]:'var(--outside-cream2)', background:h>0?tc[name]+'18':'transparent', borderRadius:4, padding:'1px 0' }}>
@@ -1124,7 +1119,7 @@ ${slotRows}
             return (
               <div key={period} style={{ marginBottom: period==='matin' ? 20 : 0 }}>
                 <div style={{ fontSize:'0.72rem', fontWeight:800, textTransform:'uppercase', color:'var(--muted)', marginBottom:10 }}>
-                  {period === 'matin' ? '☀ Shift Matin' : '🌙 Shift Soir'}
+                  {period === 'matin' ? '☀ Shift matin · 07:00–15:00' : '🌙 Shift soir · 16:00–00:00'}
                 </div>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginBottom:10 }}>
                   {ROLES_MAIN.map(r => (
