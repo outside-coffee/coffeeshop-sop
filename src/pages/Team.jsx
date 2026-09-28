@@ -57,7 +57,7 @@ export default function Team() {
     const result = await signUpWithPin(displayName, form.role, form.pin)
     if (result?.error) { setSaving(false); return { error: result.error } }
     if (result?.user?.id) {
-      await supabase.from('profiles').update({
+      const { error: profileError } = await supabase.from('profiles').update({
         prenom: form.prenom, nom: form.nom,
         role_operationnel: form.role_operationnel,
         date_recrutement: form.date_recrutement || null,
@@ -66,6 +66,10 @@ export default function Team() {
         is_planning_member: form.is_planning_member,
         actif: true,
       }).eq('id', result.user.id)
+      if (profileError) {
+        setSaving(false)
+        return { error: profileError }
+      }
     }
     await fetchMembers()
     setSaving(false); setModal(false)
@@ -97,7 +101,11 @@ export default function Team() {
 
   async function toggleActif(member) {
     const newVal = !member.actif
-    await supabase.from('profiles').update({ actif: newVal }).eq('id', member.id)
+    const { error } = await supabase.from('profiles').update({ actif: newVal }).eq('id', member.id)
+    if (error) {
+      alert('Erreur: ' + error.message)
+      return
+    }
     setMembers(m => m.map(x => x.id === member.id ? { ...x, actif: newVal } : x))
   }
 
