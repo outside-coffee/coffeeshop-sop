@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext({})
@@ -47,21 +48,21 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.functions.invoke('manage-team-user', {
       body: { action: 'create', name, role, pin },
     })
-    return { user: data?.user || null, error: error || (data?.error ? new Error(data.error) : null) }
+    return { user: data?.user || null, error: await functionError(error, data) }
   }
 
   async function resetUserPin(userId, pin) {
     const { data, error } = await supabase.functions.invoke('manage-team-user', {
       body: { action: 'reset-pin', userId, pin },
     })
-    return { data, error: error || (data?.error ? new Error(data.error) : null) }
+    return { data, error: await functionError(error, data) }
   }
 
   async function deleteTeamUser(userId) {
     const { data, error } = await supabase.functions.invoke('manage-team-user', {
       body: { action: 'delete', userId },
     })
-    return { data, error: error || (data?.error ? new Error(data.error) : null) }
+    return { data, error: await functionError(error, data) }
   }
 
   async function signOut() {
@@ -76,3 +77,19 @@ export function AuthProvider({ children }) {
 }
 
 export const useAuth = () => useContext(AuthContext)
+
+async function functionError(error, data) {
+  if (data?.error) return new Error(data.error)
+  if (!error) return null
+
+  if (error instanceof FunctionsHttpError) {
+    try {
+      const payload = await error.context.json()
+      if (payload?.error) return new Error(payload.error)
+    } catch (_) {
+      // Fall back to the SDK message if the response body is not JSON.
+    }
+  }
+
+  return error
+}

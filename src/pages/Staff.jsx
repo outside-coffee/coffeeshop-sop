@@ -118,6 +118,13 @@ const ROLES_OPS_LABELS = {
   femme_menage: 'Femme de ménage',
 }
 
+const ORG_GROUPS = [
+  { key: 'bar', label: 'Bar & café', icon: '☕', roles: ['barista_lead', 'barista'] },
+  { key: 'service', label: 'Service', icon: '🤝', roles: ['service_crew'] },
+  { key: 'support', label: 'Support', icon: '🧹', roles: ['support_crew'] },
+  { key: 'cleaning', label: 'Entretien', icon: '🧺', roles: ['femme_menage'] },
+]
+
 export default function Staff() {
   const { profile } = useAuth()
   const isManager   = hasRole(profile, 'manager')
@@ -126,23 +133,34 @@ export default function Staff() {
   const [expandedRole, setExpandedRole] = useState(null)
   const [team, setTeam]             = useState([])
   const [teamLoading, setTeamLoading] = useState(true)
+  const [teamError, setTeamError]   = useState('')
 
   useEffect(() => { loadTeam() }, [])
 
   async function loadTeam() {
-    const { data } = await supabase.rpc('list_staff_profiles')
+    setTeamLoading(true)
+    setTeamError('')
+    const { data, error } = await supabase.rpc('list_staff_profiles')
+    if (error) {
+      setTeam([])
+      setTeamError(error.message || 'Impossible de charger l’équipe.')
+      setTeamLoading(false)
+      return
+    }
     // Normaliser en format TEAM
     const ROLE_ORDER = ['manager','barista_lead','barista','service_crew','support_crew','femme_menage']
     const sorted = (data || []).filter(m => m.actif && m.role !== 'admin').sort((a,b) => {
       const ra = ROLE_ORDER.indexOf(a.role_operationnel || a.role)
       const rb = ROLE_ORDER.indexOf(b.role_operationnel || b.role)
-      return ra - rb
+      return (ra === -1 ? 999 : ra) - (rb === -1 ? 999 : rb) || a.name.localeCompare(b.name)
     })
     setTeam(sorted.map(m => ({
       id:    m.id,
       name:  m.name,
+      technicalRole: m.role,
+      operationalRole: m.role_operationnel || m.role,
       role:  m.role_operationnel || m.role,
-      poste: ROLES_OPS_LABELS[m.role_operationnel || m.role] || m.role,
+      poste: ROLES_OPS_LABELS[m.role_operationnel || m.role] || m.role_operationnel || m.role,
       color: m.planning_color || m.avatar_color || '#999',
     })))
     setTeamLoading(false)
@@ -150,6 +168,7 @@ export default function Staff() {
 
   // Alias TEAM → team pour compatibilité avec le reste du code
   const TEAM = team
+  const managers = TEAM.filter(m => m.technicalRole === 'manager')
   const [evalModal, setEvalModal]   = useState(null)    // membre sélectionné
   const [evals, setEvals]           = useState([])
   const [loading, setLoading]       = useState(false)
@@ -208,15 +227,21 @@ export default function Staff() {
         {tab === 'org' && (
           teamLoading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Spinner size={24} /></div>
+          ) : teamError ? (
+            <div className="card" style={{ padding: '1rem', color: 'var(--danger)', fontWeight: 700 }}>{teamError}</div>
+          ) : TEAM.length === 0 ? (
+            <div className="card" style={{ padding: '1rem', color: 'var(--muted)' }}>Aucun membre actif à afficher.</div>
           ) : (
             <>
               {/* ORGANIGRAMME */}
               <div style={{ marginBottom: '1.25rem' }}>
                 <div className="section-label">Organigramme</div>
 
-                {/* Manager */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
-                  {TEAM[0] && <MemberCard member={TEAM[0]} />}
+                {/* Direction — basée sur le rôle technique, pas sur l'ordre du tableau */}
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                  {managers.map(member => (
+                    <MemberCard key={member.id} member={member} roleOverride="manager" subtitle={`Manager · ${member.poste}`} />
+                  ))}
                 </div>
 
                 {/* Ligne de connexion */}
@@ -224,29 +249,30 @@ export default function Staff() {
                   <div style={{ width: 2, height: 20, background: 'var(--outside-cream2)' }} />
                 </div>
 
-                {/* Baristas */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '0.75rem' }}>
-                  {TEAM.filter(m => m.role === 'barista' || m.role === 'barista_lead').map(m => <MemberCard key={m.name} member={m} />)}
-                </div>
-
-                {/* Service & Support */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '8px' }}>
-                  {['service_crew', 'support_crew'].map(role => {
-                    const members = TEAM.filter(m => m.role === role)
-                    const rd = getRoleDef(role)
+                {/* Équipes opérationnelles */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '8px' }}>
+                  {ORG_GROUPS.map(group => {
+                    const members = TEAM.filter(m => group.roles.includes(m.operationalRole))
+                    if (members.length === 0) return null
                     return (
-                      <div key={role} className="card" style={{ padding: '0.75rem 1rem' }}>
+                      <div key={group.key} className="card" style={{ padding: '0.75rem 1rem' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                          <span style={{ fontSize: '1rem' }}>{rd.icon}</span>
-                          <span style={{ fontWeight: 800, fontSize: '0.85rem', color: rd.color }}>{rd.label}</span>
+                          <span style={{ fontSize: '1rem' }}>{group.icon}</span>
+                          <span style={{ fontWeight: 800, fontSize: '0.85rem' }}>{group.label}</span>
+                          <span style={{ marginLeft: 'auto', fontSize: '0.68rem', color: 'var(--muted)', fontWeight: 700 }}>{members.length}</span>
                         </div>
-                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                           {members.map(m => (
-                            <div key={m.name} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: rd.bg, padding: '4px 10px', borderRadius: 'var(--radius-pill)' }}>
-                              <div style={{ width: 24, height: 24, borderRadius: '50%', background: rd.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 800, color: 'white' }}>
+                            <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: getRoleDef(m.operationalRole).bg, padding: '6px 8px', borderRadius: 'var(--radius-md)' }}>
+                              <div style={{ width: 26, height: 26, borderRadius: '50%', background: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.68rem', fontWeight: 800, color: 'white', flexShrink: 0 }}>
                                 {m.name.charAt(0)}
                               </div>
-                              <span style={{ fontWeight: 700, fontSize: '0.82rem', color: rd.color }}>{m.name}</span>
+                              <div style={{ minWidth: 0 }}>
+                                <div style={{ fontWeight: 700, fontSize: '0.82rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</div>
+                                <div style={{ fontSize: '0.65rem', color: getRoleDef(m.operationalRole).color, fontWeight: 700 }}>
+                                  {m.poste}{m.technicalRole === 'manager' ? ' · Manager' : ''}
+                                </div>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -262,13 +288,15 @@ export default function Staff() {
                 {TEAM.map((member, idx) => {
                   const rd = getRoleDef(member.role)
                   return (
-                    <div key={member.name} style={{ padding: '0.85rem 1rem', borderBottom: idx < TEAM.length - 1 ? '1.5px solid var(--outside-cream)' : 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div key={member.id} style={{ padding: '0.85rem 1rem', borderBottom: idx < TEAM.length - 1 ? '1.5px solid var(--outside-cream)' : 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div style={{ width: 40, height: 40, borderRadius: '50%', background: rd.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', fontWeight: 800, color: 'white', flexShrink: 0 }}>
                         {member.name.charAt(0)}
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 800, fontSize: '0.9rem' }}>{member.name}</div>
-                        <div style={{ fontSize: '0.72rem', color: rd.color, fontWeight: 700, marginTop: '1px' }}>{rd.label}</div>
+                        <div style={{ fontSize: '0.72rem', color: rd.color, fontWeight: 700, marginTop: '1px' }}>
+                          {rd.label}{member.technicalRole === 'manager' && member.operationalRole !== 'manager' ? ' · Manager' : ''}
+                        </div>
                       </div>
                       <div style={{ fontSize: '0.7rem', background: rd.bg, color: rd.color, padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>
                         {rd.icon}
@@ -429,8 +457,8 @@ function BottomSheet({ title, onClose, children }) {
   )
 }
 
-function MemberCard({ member }) {
-  const rd = getRoleDef(member.role)
+function MemberCard({ member, roleOverride, subtitle }) {
+  const rd = getRoleDef(roleOverride || member.role)
   return (
     <div className="card" style={{ padding: '0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
       <div style={{ width: 36, height: 36, borderRadius: '50%', background: rd.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.9rem', fontWeight: 800, color: 'white', flexShrink: 0 }}>
@@ -438,7 +466,7 @@ function MemberCard({ member }) {
       </div>
       <div>
         <div style={{ fontWeight: 800, fontSize: '0.875rem' }}>{member.name}</div>
-        <div style={{ fontSize: '0.68rem', color: rd.color, fontWeight: 700 }}>{rd.icon} {rd.label}</div>
+        <div style={{ fontSize: '0.68rem', color: rd.color, fontWeight: 700 }}>{rd.icon} {subtitle || rd.label}</div>
       </div>
     </div>
   )
