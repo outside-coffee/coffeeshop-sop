@@ -7,9 +7,14 @@ import { format } from 'date-fns'
 import { fr } from 'date-fns/locale'
 
 const SHIFTS = [
-  { value: 'morning',   label: 'Matin (8h-16h)' },
-  { value: 'afternoon', label: 'Soir (16h-fermeture)' },
+  { value: 'morning', label: 'Shift matin' },
+  { value: 'evening', label: 'Shift soir' },
 ]
+
+const emptyForm = shift => ({
+  shift, ca: '', covers: '', cash_status: 'ok', cash_diff: '',
+  stock_issues: '', equipment_issues: '', customer_incidents: '', handover_notes: '',
+})
 
 export default function ShiftReport() {
   const { profile } = useAuth()
@@ -17,21 +22,25 @@ export default function ShiftReport() {
   const [saving, setSaving]   = useState(false)
   const [saved, setSaved]     = useState(false)
   const [existing, setExisting] = useState(null)
+  const [error, setError]     = useState('')
   const today = format(new Date(), 'yyyy-MM-dd')
 
-  const [form, setForm] = useState({
-    shift: 'morning', ca: '', covers: '',
-    cash_status: 'ok', cash_diff: '',
-    stock_issues: '', equipment_issues: '',
-    customer_incidents: '', handover_notes: '',
-  })
+  const [form, setForm] = useState(() => emptyForm('morning'))
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase.from('shift_reports')
+      setLoading(true)
+      setError('')
+      const selectedShift = form.shift
+      const { data, error: loadError } = await supabase.from('shift_reports')
         .select('*').eq('date', today).eq('barista_id', profile?.id)
-        .order('created_at', { ascending: false }).limit(1).maybeSingle()
+        .eq('shift', selectedShift).maybeSingle()
+      if (loadError) {
+        setError(loadError.message || 'Impossible de charger le rapport.')
+        setLoading(false)
+        return
+      }
       if (data) {
         setExisting(data)
         setForm({
@@ -45,15 +54,20 @@ export default function ShiftReport() {
           handover_notes: data.handover_notes || '',
         })
         setSaved(true)
+      } else {
+        setExisting(null)
+        setForm(emptyForm(selectedShift))
+        setSaved(false)
       }
       setLoading(false)
     }
     if (profile) load()
-  }, [profile])
+  }, [profile, form.shift, today])
 
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
+    setError('')
     const payload = {
       date: today, barista_id: profile.id, shift: form.shift,
       ca: form.ca ? parseFloat(form.ca) : null,
@@ -65,12 +79,15 @@ export default function ShiftReport() {
       customer_incidents: form.customer_incidents || null,
       handover_notes: form.handover_notes || null,
     }
-    if (existing) {
-      await supabase.from('shift_reports').update(payload).eq('id', existing.id)
-    } else {
-      const { data } = await supabase.from('shift_reports').insert(payload).select().single()
-      setExisting(data)
+    const { data, error: saveError } = await supabase.from('shift_reports')
+      .upsert(payload, { onConflict: 'barista_id,date,shift' })
+      .select().single()
+    if (saveError) {
+      setError(saveError.message || 'Impossible d’enregistrer le rapport.')
+      setSaving(false)
+      return
     }
+    setExisting(data)
     setSaved(true)
     setSaving(false)
   }
@@ -85,7 +102,7 @@ export default function ShiftReport() {
             <h1 className="page-title">Rapport shift</h1>
             <p className="page-subtitle">{format(new Date(), "EEE d MMMM", { locale: fr })}</p>
           </div>
-          {saved && <Badge color="green"><CheckCircle size={11} /> Enregistre</Badge>}
+          {saved && <Badge color="green"><CheckCircle size={11} /> Enregistré</Badge>}
         </div>
       </div>
 
@@ -95,12 +112,18 @@ export default function ShiftReport() {
           {/* SHIFT */}
           <div className="card" style={{ padding: '1rem' }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Shift</label>
-              <select className="form-select" value={form.shift} onChange={e => set('shift', e.target.value)}>
+              <label className="form-label">Période du rapport</label>
+              <select className="form-select" value={form.shift} onChange={e => setForm(emptyForm(e.target.value))}>
                 {SHIFTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
           </div>
+
+          {error && (
+            <div style={{ background: '#FDEEEC', color: 'var(--danger)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', fontWeight: 700, fontSize: '0.82rem' }}>
+              {error}
+            </div>
+          )}
 
           {/* CAISSE */}
           <div className="card" style={{ padding: '1rem' }}>
@@ -112,16 +135,20 @@ export default function ShiftReport() {
               <input className="form-input" type="number" step="0.01" min="0" placeholder="ex: 480" value={form.ca} onChange={e => set('ca', e.target.value)} />
             </div>
             <div className="form-group" style={{ marginTop: '0.75rem', marginBottom: 0 }}>
+              <label className="form-label">Nombre de clients</label>
+              <input className="form-input" type="number" step="1" min="0" placeholder="ex : 85" value={form.covers} onChange={e => set('covers', e.target.value)} />
+            </div>
+            <div className="form-group" style={{ marginTop: '0.75rem', marginBottom: 0 }}>
               <label className="form-label">Caisse</label>
               <select className="form-select" value={form.cash_status} onChange={e => set('cash_status', e.target.value)}>
-                <option value="ok">Aucun ecart</option>
-                <option value="surplus">Excedent</option>
+                <option value="ok">Aucun écart</option>
+                <option value="surplus">Excédent</option>
                 <option value="missing">Manquant</option>
               </select>
             </div>
             {form.cash_status !== 'ok' && (
               <div className="form-group" style={{ marginTop: '0.75rem', marginBottom: 0 }}>
-                <label className="form-label">Montant ecart (DT)</label>
+                <label className="form-label">Montant de l’écart (DT)</label>
                 <input className="form-input" type="number" step="0.01" min="0" placeholder="ex: 5.50" value={form.cash_diff} onChange={e => set('cash_diff', e.target.value)} />
               </div>
             )}
@@ -138,8 +165,8 @@ export default function ShiftReport() {
                 <input className="form-input" type="text" placeholder="ex: lait d'avoine, sucre..." value={form.stock_issues} onChange={e => set('stock_issues', e.target.value)} />
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Equipement</label>
-                <input className="form-input" type="text" placeholder="ex: moulin a regler..." value={form.equipment_issues} onChange={e => set('equipment_issues', e.target.value)} />
+                <label className="form-label">Équipement</label>
+                <input className="form-input" type="text" placeholder="ex : moulin à régler..." value={form.equipment_issues} onChange={e => set('equipment_issues', e.target.value)} />
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">Incidents clients</label>
@@ -152,14 +179,14 @@ export default function ShiftReport() {
           <div className="card" style={{ padding: '1rem' }}>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">Consignes pour le shift suivant</label>
-              <textarea className="form-textarea" rows={4} placeholder="Ce que l'equipe suivante doit savoir..." value={form.handover_notes} onChange={e => set('handover_notes', e.target.value)} />
+              <textarea className="form-textarea" rows={4} placeholder="Ce que l’équipe suivante doit savoir..." value={form.handover_notes} onChange={e => set('handover_notes', e.target.value)} />
             </div>
           </div>
 
           <button type="submit" className="btn btn-primary btn-lg" disabled={saving}
             style={{ width: '100%', justifyContent: 'center' }}>
             {saving ? <Spinner size={18} /> : <CheckCircle size={18} />}
-            {existing ? 'Mettre a jour' : 'Enregistrer le rapport'}
+            {existing ? 'Mettre à jour' : 'Enregistrer le rapport'}
           </button>
         </form>
       </div>
