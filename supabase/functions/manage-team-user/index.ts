@@ -52,7 +52,9 @@ Deno.serve(async (req) => {
         .replace(/[^a-z0-9]/g, '').slice(0, 30) || 'membre'
       const suffix = crypto.randomUUID().slice(0, 8)
       const email = `${slug}.${suffix}@outside.invalid`
-      const temporaryPassword = `${crypto.randomUUID()}-${crypto.randomUUID()}`
+      // Supabase Auth limits passwords to 72 characters. A UUID is already
+      // cryptographically random and stays comfortably below that limit.
+      const temporaryPassword = crypto.randomUUID()
       const { data: created, error: createError } = await admin.auth.admin.createUser({
         email,
         password: temporaryPassword,
