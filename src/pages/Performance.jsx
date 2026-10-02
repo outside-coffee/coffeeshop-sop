@@ -4,6 +4,7 @@ import { Spinner } from '../components/UI'
 import { format, startOfMonth, endOfMonth, subMonths, subWeeks, startOfWeek, endOfWeek, getISOWeek, getISOWeekYear } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Download, ChevronDown, ChevronUp } from 'lucide-react'
+import { buildProductAliasMap, canonicalProductName, normalizeProductKey } from '../lib/productAliases'
 
 // ── CONSTANTES ────────────────────────────────────────────────────────────
 const DATE_CHG_TABLE = new Date('2026-03-19') // avant = table 22 = conso perso
@@ -25,14 +26,6 @@ const fmtN  = n => new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).
 const fmtDT = n => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + ' DT'
 const fmtD  = (n, d=2) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }).format(n)
 const fmtPct = n => (n * 100).toFixed(1) + '%'
-
-// ── NETTOYAGE PRODUIT (reproduit R: str_trim + str_remove + str_squish) ──
-function cleanProduit(s) {
-  return s.trim()
-          .replace(/[^a-zA-Z0-9\u00C0-\u024F\s]+$/, '') // supprime non-alphanum en fin
-          .replace(/\s+/g, ' ')                           // squish
-          .trim()
-}
 
 // ── CALCUL NB_PERSONNE pour un ticket ─────────────────────────────────────
 // = somme des lignes où le produit ne fait PAS partie des exclusions
@@ -56,14 +49,14 @@ function calcQte(produit, famille, qte) {
 }
 
 // ── HELPER : agrège les lignes en totaux ─────────────────────────────────
-function computeTotals(lines, prodsMap, consoPersoOnly) {
+function computeTotals(lines, prodsMap, aliasMap, consoPersoOnly) {
   const enriched = lines.map(l => {
     const dateVente    = new Date(l.date_vente + 'T00:00:00')
     const isConsoPerso = l.numtable === 32 || (l.numtable === 22 && dateVente < DATE_CHG_TABLE)
     if (consoPersoOnly && !isConsoPerso) return null
     if (!consoPersoOnly && isConsoPerso) return null
-    const produit    = cleanProduit(l.produit)
-    const info       = prodsMap[produit.toUpperCase()] || {}
+    const produit    = canonicalProductName(l.produit, aliasMap)
+    const info       = prodsMap[normalizeProductKey(produit)] || {}
     const famille    = info.famille || ''
     const heure      = l.heure ? parseInt(l.heure.split(':')[0]) : 12
     const prixU      = parseFloat(l.prix_unitaire || l.total_ttc || 0)
@@ -130,9 +123,13 @@ export default function Performance() {
     }
 
     // 2. Table produits
-    const { data: produits } = await supabase.from('produits').select('nom_produit, famille, prix')
+    const [{ data: produits }, { data: aliases }] = await Promise.all([
+      supabase.from('produits').select('nom_produit, famille, prix'),
+      supabase.from('produit_aliases').select('alias, nom_produit, actif').eq('actif', true),
+    ])
+    const aliasMap = buildProductAliasMap(aliases)
     const prodsMap = {}
-    for (const p of (produits || [])) prodsMap[p.nom_produit.toUpperCase().trim()] = p
+    for (const p of (produits || [])) prodsMap[normalizeProductKey(p.nom_produit)] = p
 
     // 3. Nettoyer + enrichir chaque ligne
     const enriched = lines
@@ -147,8 +144,8 @@ export default function Performance() {
         if (consoPersoOnly && !isConsoPerso) return null
         if (!consoPersoOnly && isConsoPerso) return null
 
-        const produit = cleanProduit(l.produit)
-        const info    = prodsMap[produit.toUpperCase()] || {}
+        const produit = canonicalProductName(l.produit, aliasMap)
+        const info    = prodsMap[normalizeProductKey(produit)] || {}
         const famille = info.famille || ''
         const heure   = l.heure ? parseInt(l.heure.split(':')[0]) : 12
         const partieJour = heure < 14 ? 'avant' : 'apres'
@@ -296,7 +293,7 @@ export default function Performance() {
       if (batch.length < 1000) break
       p2++
     }
-    const prevTotals = computeTotals(prevLines, prodsMap, consoPersoOnly)
+    const prevTotals = computeTotals(prevLines, prodsMap, aliasMap, consoPersoOnly)
     prevTotals.caJour = nbDays > 0 ? parseFloat((prevTotals.ca / nbDays).toFixed(2)) : 0
     prevTotals.label  = `${format(prevFrom, 'd MMM', { locale: fr })} → ${format(prevTo, 'd MMM', { locale: fr })}`
     setPrev(prevTotals)

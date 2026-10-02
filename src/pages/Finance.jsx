@@ -5,6 +5,7 @@ import { Spinner, Modal } from '../components/UI'
 import { Plus, Save, Trash2, Edit2, TrendingUp, TrendingDown } from 'lucide-react'
 import { format, subMonths, endOfMonth } from 'date-fns'
 import { fr } from 'date-fns/locale'
+import { buildProductAliasMap, canonicalProductName } from '../lib/productAliases'
 
 const CATEGORIES_CHARGES = ['Loyer','Electricite','Eau','Fournisseur','Marketing','Maintenance','Autre']
 const ROLE_COLORS = { manager: '#C4521A', barista: '#1A5C4A', service_crew: '#3D5A8A', support_crew: '#8B6B8A' }
@@ -168,10 +169,12 @@ function TabResultat({ period, isAdmin }) {
     let foodCostTheo = 0
     try {
       // Récupérer les compositions et matières premières
-      const [{ data: compo }, { data: mp }] = await Promise.all([
+      const [{ data: compo }, { data: mp }, { data: aliases }] = await Promise.all([
         supabase.from('composition_produit').select('nom_produit, matiere, quantite_m, prix_achat, type'),
         supabase.from('matiere_premiere').select('matiere, prix, quantite').or('actif.eq.true,actif.is.null'),
+        supabase.from('produit_aliases').select('alias, nom_produit, actif').eq('actif', true),
       ])
+      const aliasMap = buildProductAliasMap(aliases)
 
       // Ventes de la période
       let ventesFC = [], pageFC = 0
@@ -209,7 +212,7 @@ function TabResultat({ period, isAdmin }) {
       // prix_achat dans composition_produit = coût déjà calculé pour quantite_m
       // Donc : coût total = qte_vendue × prix_achat
       for (const v of ventesFC) {
-        const prodKey = norm(v.produit)
+        const prodKey = norm(canonicalProductName(v.produit, aliasMap))
         const ingredients = produitMap[prodKey] || []
         for (const c of ingredients) {
           const matiereNorm = norm(c.matiere)
