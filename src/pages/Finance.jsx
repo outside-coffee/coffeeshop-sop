@@ -170,7 +170,7 @@ function TabResultat({ period, isAdmin }) {
     try {
       // Récupérer les compositions et matières premières
       const [{ data: compo }, { data: mp }, { data: aliases }] = await Promise.all([
-        supabase.from('composition_produit').select('nom_produit, matiere, quantite_m, prix_achat, type'),
+        supabase.from('composition_produit').select('nom_produit, matiere, quantite_m, prix_achat, type').eq('actif', true),
         supabase.from('matiere_premiere').select('matiere, prix, quantite').or('actif.eq.true,actif.is.null'),
         supabase.from('produit_aliases').select('alias, nom_produit, actif').eq('actif', true),
       ])
