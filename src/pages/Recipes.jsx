@@ -228,6 +228,7 @@ export default function Recipes() {
       supabase.from('composition_produit')
         .select('*')
         .eq('type', 'produit fini')
+        .eq('actif', true)
         .order('nom_produit').order('id'),
       supabase.from('produits')
         .select('nom_produit, famille')
