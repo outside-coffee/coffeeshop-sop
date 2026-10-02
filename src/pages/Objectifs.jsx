@@ -5,6 +5,7 @@ import { Spinner, Modal } from '../components/UI'
 import { addDays, format, parseISO, startOfMonth, endOfMonth, subMonths, differenceInCalendarDays } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Plus, Save, Target, CheckCircle2, XCircle, Star, Trash2 } from 'lucide-react'
+import { buildProductAliasMap, canonicalProductName } from '../lib/productAliases'
 
 const norm = s => s?.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim()||''
 const fN  = (n,d=1) => n==null ? '—' : parseFloat(n).toLocaleString('fr-FR',{minimumFractionDigits:d,maximumFractionDigits:d})
@@ -44,12 +45,14 @@ export default function Objectifs() {
       { data: customObjs },
       { data: ctrl },
       { data: produitsData },
+      { data: aliasesData },
       { data: avisData },
     ] = await Promise.all([
       supabase.from('objectifs').select('*').eq('actif',true).order('type'),
       supabase.from('objectifs').select('*').eq('is_custom',true).eq('periode',period).order('created_at'),
       supabase.from('controles_fiches').select('*').gte('date_controle',dateFrom).lte('date_controle',dateTo).order('date_controle',{ascending:false}),
       supabase.from('produits').select('nom_produit,famille'),
+      supabase.from('produit_aliases').select('alias,nom_produit,actif').eq('actif',true),
       supabase.from('avis_google').select('*').eq('periode',period).maybeSingle(),
     ])
 
@@ -121,13 +124,14 @@ export default function Objectifs() {
 
     // Ventes Cookies (famille COOKIESIDE + tout produit contenant "COOKIE", exclut conso perso)
     const familleMap = {}
+    const aliasMap = buildProductAliasMap(aliasesData)
     for (const p of (produitsData||[])) familleMap[norm(p.nom_produit)] = p.famille
     let cookieCount = 0
     for (const v of (ventesData||[])) {
       const dateVente = new Date(v.date_vente)
       const isConsoPerso = v.numtable === 32 || (v.numtable === 22 && dateVente < DATE_CHG_TABLE)
       if (isConsoPerso) continue
-      const fam = familleMap[norm(v.produit)]
+      const fam = familleMap[norm(canonicalProductName(v.produit, aliasMap))]
       const isCookie = fam === 'COOKIESIDE' || norm(v.produit).includes('cookie')
       if (isCookie) cookieCount += parseFloat(v.qte||0)
     }
