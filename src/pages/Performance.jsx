@@ -424,9 +424,9 @@ export default function Performance() {
                 onClick={() => { setDateFrom(p.from); setDateTo(p.to) }}>{p.label}</button>
             ))}
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
-            <div><label className="form-label">Du</label><input className="form-input" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div>
-            <div><label className="form-label">Au</label><input className="form-input" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div>
+          <div className="performance-date-grid">
+            <div className="performance-date-field"><label className="form-label">Du</label><input className="form-input performance-date-input" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} /></div>
+            <div className="performance-date-field"><label className="form-label">Au</label><input className="form-input performance-date-input" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} /></div>
           </div>
           {/* SWITCHER CONSO PERSO */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderTop: '1.5px solid var(--outside-cream)', marginBottom: '0.75rem' }}>
@@ -486,9 +486,9 @@ export default function Performance() {
               })}
             </div>
 
-            {/* CA avant/après 15h, heure tunisienne */}
+            {/* CA avant/après 15h */}
             <div className="card" style={{ padding: '0.85rem 1rem', marginBottom: '1rem' }}>
-              <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Répartition avant / après 15h · heure Tunisie</div>
+              <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Répartition avant / après 15h</div>
               <div style={{ display: 'flex', gap: '12px' }}>
                 {[
                   { label: 'Avant 15h', ca: data.total.caAvant, color: 'var(--outside-amber)' },
@@ -507,7 +507,7 @@ export default function Performance() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '8px', flexWrap: 'wrap' }}>
               <div className="tabs" style={{ flex: 1, minWidth: 200 }}>
                 <button className={`tab-btn${view==='jour' ? ' active' : ''}`} onClick={() => setView('jour')}>Jours</button>
-                <button className={`tab-btn${view==='heure' ? ' active' : ''}`} onClick={() => setView('heure')}>Heures Tunisie</button>
+                <button className={`tab-btn${view==='heure' ? ' active' : ''}`} onClick={() => setView('heure')}>Heures</button>
                 <button className={`tab-btn${view==='produit' ? ' active' : ''}`} onClick={() => setView('produit')}>Produits</button>
                 <button className={`tab-btn${view==='famille' ? ' active' : ''}`} onClick={() => setView('famille')}>Familles</button>
               </div>
@@ -568,9 +568,6 @@ export default function Performance() {
             {/* VUE HEURES */}
             {view === 'heure' && (
               <div className="card" style={{ overflowX: 'auto' }}>
-                <div style={{ padding: '0.7rem 1rem', fontSize: '0.68rem', color: 'var(--muted)', fontWeight: 700, borderBottom: '1.5px solid var(--outside-cream)' }}>
-                  Fuseau Tunisie · conversion automatique depuis l’heure de Paris
-                </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                   <thead>
                     <tr>

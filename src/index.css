@@ -340,6 +340,26 @@ h3 { font-size: 1.1rem; }
   box-shadow: 0 0 0 3px rgba(196,82,26,0.1);
 }
 
+.performance-date-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.performance-date-field,
+.performance-date-input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 480px) {
+  .performance-date-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.6rem;
+  }
+}
+
 .form-textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
 
 /* ── BADGES ──────────────────────────────────────────────────────────────── */
