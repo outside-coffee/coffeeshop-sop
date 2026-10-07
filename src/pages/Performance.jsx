@@ -10,6 +10,9 @@ import { buildProductAliasMap, canonicalProductName, normalizeProductKey } from 
 const DATE_CHG_TABLE = new Date('2026-03-19') // avant = table 22 = conso perso
 const EXCLUS_QTE     = ['EXTRA', 'EAU 1/2', 'EAU 0.5', 'EAU 1.0']
 const EXCLUS_TICKET  = ['EXTRA', 'EAU 1/2', 'EAU 0.5','EAU 1.0'] // + famille EXTRA + COOKIESIDE
+const SOURCE_TIME_ZONE = 'Europe/Paris'
+const DISPLAY_TIME_ZONE = 'Africa/Tunis'
+const DAY_PART_CUTOFF_HOUR = 15
 
 const today     = new Date()
 const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
@@ -27,9 +30,41 @@ const fmtDT = n => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, ma
 const fmtD  = (n, d=2) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }).format(n)
 const fmtPct = n => (n * 100).toFixed(1) + '%'
 
-function parseHour(value) {
-  const hour = parseInt(value?.split(':')[0], 10)
-  return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : 12
+function timeZoneOffsetMinutes(date, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const values = Object.fromEntries(parts.filter(p => p.type !== 'literal').map(p => [p.type, Number(p.value)]))
+  const representedAsUtc = Date.UTC(values.year, values.month - 1, values.day, values.hour, values.minute, values.second)
+  return (representedAsUtc - date.getTime()) / 60000
+}
+
+function parseHour(dateValue, timeValue) {
+  const [year, month, day] = (dateValue || '').split('-').map(Number)
+  const [hour = 12, minute = 0, second = 0] = (timeValue || '').split(':').map(Number)
+  if (![year, month, day, hour, minute, second].every(Number.isFinite)) return 12
+
+  const localAsUtc = new Date(Date.UTC(year, month - 1, day, hour, minute, second))
+  let sourceOffset = timeZoneOffsetMinutes(localAsUtc, SOURCE_TIME_ZONE)
+  let instant = new Date(localAsUtc.getTime() - sourceOffset * 60000)
+
+  // Recalcule l'offset sur l'instant obtenu pour rester juste aux changements d'heure.
+  const correctedOffset = timeZoneOffsetMinutes(instant, SOURCE_TIME_ZONE)
+  if (correctedOffset !== sourceOffset) {
+    sourceOffset = correctedOffset
+    instant = new Date(localAsUtc.getTime() - sourceOffset * 60000)
+  }
+
+  const tunisHour = new Intl.DateTimeFormat('en-GB', {
+    timeZone: DISPLAY_TIME_ZONE,
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(instant).find(part => part.type === 'hour')?.value
+  const parsed = Number(tunisHour)
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= 23 ? parsed : 12
 }
 
 function formatHourRange(hour) {
@@ -69,11 +104,11 @@ function computeTotals(lines, prodsMap, aliasMap, consoPersoOnly) {
     const produit    = canonicalProductName(l.produit, aliasMap)
     const info       = prodsMap[normalizeProductKey(produit)] || {}
     const famille    = info.famille || ''
-    const heure      = parseHour(l.heure)
+    const heure      = parseHour(l.date_vente, l.heure)
     const prixU      = parseFloat(l.prix_unitaire || l.total_ttc || 0)
     const qteCalc    = calcQte(produit, famille, l.qte)
     const nbPers     = isPersonne(produit, famille) ? 1 : 0
-    return { id_ticket: l.id_ticket_compact, prixU, qteCalc, nbPers, avant: heure < 14 }
+    return { id_ticket: l.id_ticket_compact, prixU, qteCalc, nbPers, avant: heure < DAY_PART_CUTOFF_HOUR }
   }).filter(Boolean)
 
   const tMap = {}
@@ -158,8 +193,8 @@ export default function Performance() {
         const produit = canonicalProductName(l.produit, aliasMap)
         const info    = prodsMap[normalizeProductKey(produit)] || {}
         const famille = info.famille || ''
-        const heure   = parseHour(l.heure)
-        const partieJour = heure < 14 ? 'avant' : 'apres'
+        const heure   = parseHour(l.date_vente, l.heure)
+        const partieJour = heure < DAY_PART_CUTOFF_HOUR ? 'avant' : 'apres'
         const prixU   = parseFloat(l.prix_unitaire || l.total_ttc || 0)
         const qteCalc = calcQte(produit, famille, l.qte)
         const nbPers  = isPersonne(produit, famille) ? 1 : 0
@@ -351,7 +386,7 @@ export default function Performance() {
     const periode = `${format(new Date(dateFrom+'T00:00:00'),"d MMM",{locale:fr})} → ${format(new Date(dateTo+'T00:00:00'),"d MMM yyyy",{locale:fr})}`
     let rows = [], header = []
     if (view === 'jour') {
-      header = ['Date','Jour','CA','CA<14h','CA>14h','Tickets','QTE','PM','IV','Prix moy.']
+      header = ['Date','Jour','CA','CA<15h','CA≥15h','Tickets','QTE','PM','IV','Prix moy.']
       rows = sorted(data.jours, 'date').map(j => [j.date,j.jour,j.ca,j.ca_avant,j.ca_apres,j.nb,j.qte,j.pm,j.iv,j.prix])
     } else if (view === 'heure') {
       header = ['Créneau','CA','Part CA','Tickets','QTE','PM','IV','Prix moy.']
@@ -451,13 +486,13 @@ export default function Performance() {
               })}
             </div>
 
-            {/* CA avant/après 14h */}
+            {/* CA avant/après 15h, heure tunisienne */}
             <div className="card" style={{ padding: '0.85rem 1rem', marginBottom: '1rem' }}>
-              <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Répartition avant / après 14h</div>
+              <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: '8px' }}>Répartition avant / après 15h · heure Tunisie</div>
               <div style={{ display: 'flex', gap: '12px' }}>
                 {[
-                  { label: 'Avant 14h', ca: data.total.caAvant, color: 'var(--outside-amber)' },
-                  { label: 'Après 14h', ca: data.total.caApres, color: 'var(--outside-teal)' },
+                  { label: 'Avant 15h', ca: data.total.caAvant, color: 'var(--outside-amber)' },
+                  { label: 'À partir de 15h', ca: data.total.caApres, color: 'var(--outside-teal)' },
                 ].map(s => (
                   <div key={s.label} style={{ flex: 1 }}>
                     <div style={{ fontSize: '0.72rem', color: 'var(--muted)', fontWeight: 600, marginBottom: '3px' }}>{s.label}</div>
@@ -472,7 +507,7 @@ export default function Performance() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '8px', flexWrap: 'wrap' }}>
               <div className="tabs" style={{ flex: 1, minWidth: 200 }}>
                 <button className={`tab-btn${view==='jour' ? ' active' : ''}`} onClick={() => setView('jour')}>Jours</button>
-                <button className={`tab-btn${view==='heure' ? ' active' : ''}`} onClick={() => setView('heure')}>Heures</button>
+                <button className={`tab-btn${view==='heure' ? ' active' : ''}`} onClick={() => setView('heure')}>Heures Tunisie</button>
                 <button className={`tab-btn${view==='produit' ? ' active' : ''}`} onClick={() => setView('produit')}>Produits</button>
                 <button className={`tab-btn${view==='famille' ? ' active' : ''}`} onClick={() => setView('famille')}>Familles</button>
               </div>
@@ -504,7 +539,7 @@ export default function Performance() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                   <thead>
                     <tr>
-                      {['Date','CA','Tickets','PM','IV','Prix moy.','<14h','>14h'].map((h, i) => (
+                      {['Date','CA','Tickets','PM','IV','Prix moy.','<15h','≥15h'].map((h, i) => (
                         <th key={h} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '0.6rem ' + (i === 0 ? '1rem' : '0.75rem'), fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', background: 'var(--outside-cream)', borderBottom: '1.5px solid var(--outside-cream2)', whiteSpace: 'nowrap' }}>{h}</th>
                       ))}
                     </tr>
@@ -533,6 +568,9 @@ export default function Performance() {
             {/* VUE HEURES */}
             {view === 'heure' && (
               <div className="card" style={{ overflowX: 'auto' }}>
+                <div style={{ padding: '0.7rem 1rem', fontSize: '0.68rem', color: 'var(--muted)', fontWeight: 700, borderBottom: '1.5px solid var(--outside-cream)' }}>
+                  Fuseau Tunisie · conversion automatique depuis l’heure de Paris
+                </div>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
                   <thead>
                     <tr>
