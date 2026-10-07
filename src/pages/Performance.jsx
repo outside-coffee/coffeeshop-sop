@@ -27,6 +27,17 @@ const fmtDT = n => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, ma
 const fmtD  = (n, d=2) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }).format(n)
 const fmtPct = n => (n * 100).toFixed(1) + '%'
 
+function parseHour(value) {
+  const hour = parseInt(value?.split(':')[0], 10)
+  return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : 12
+}
+
+function formatHourRange(hour) {
+  const from = String(hour).padStart(2, '0')
+  const to = String((hour + 1) % 24).padStart(2, '0')
+  return `${from}h – ${to}h`
+}
+
 // ── CALCUL NB_PERSONNE pour un ticket ─────────────────────────────────────
 // = somme des lignes où le produit ne fait PAS partie des exclusions
 // et la famille n'est pas EXTRA ni COOKIESIDE
@@ -58,7 +69,7 @@ function computeTotals(lines, prodsMap, aliasMap, consoPersoOnly) {
     const produit    = canonicalProductName(l.produit, aliasMap)
     const info       = prodsMap[normalizeProductKey(produit)] || {}
     const famille    = info.famille || ''
-    const heure      = l.heure ? parseInt(l.heure.split(':')[0]) : 12
+    const heure      = parseHour(l.heure)
     const prixU      = parseFloat(l.prix_unitaire || l.total_ttc || 0)
     const qteCalc    = calcQte(produit, famille, l.qte)
     const nbPers     = isPersonne(produit, famille) ? 1 : 0
@@ -94,7 +105,7 @@ export default function Performance() {
   const [consoPersoOnly, setConsoPersoOnly] = useState(false)
   const [dateFrom, setDateFrom]   = useState(PERIODES[0].from)
   const [dateTo,   setDateTo]     = useState(PERIODES[0].to)
-  const [view, setView]           = useState('jour')     // 'jour' | 'produit' | 'famille'
+  const [view, setView]           = useState('jour')     // 'jour' | 'heure' | 'produit' | 'famille'
   const [sortBy, setSortBy]       = useState('ca')
   const [data, setData]           = useState(null)
   const [prev, setPrev]           = useState(null) // totaux mois précédent
@@ -147,7 +158,7 @@ export default function Performance() {
         const produit = canonicalProductName(l.produit, aliasMap)
         const info    = prodsMap[normalizeProductKey(produit)] || {}
         const famille = info.famille || ''
-        const heure   = l.heure ? parseInt(l.heure.split(':')[0]) : 12
+        const heure   = parseHour(l.heure)
         const partieJour = heure < 14 ? 'avant' : 'apres'
         const prixU   = parseFloat(l.prix_unitaire || l.total_ttc || 0)
         const qteCalc = calcQte(produit, famille, l.qte)
@@ -162,6 +173,7 @@ export default function Performance() {
           qteRaw:      l.qte,
           qteCalc,
           nbPers,
+          heure,
           partieJour,
           cout:        parseFloat(info.cout || 0),
         }
@@ -170,7 +182,7 @@ export default function Performance() {
 
     if (!enriched.length) {
       setLoading(false)
-      setData({ jours: [], produits: [], familles: [], famillesDisp: [], total: null })
+      setData({ jours: [], heures: [], produits: [], familles: [], famillesDisp: [], total: null })
       return
     }
 
@@ -179,6 +191,7 @@ export default function Performance() {
     for (const l of enriched) {
       if (!ticketMap[l.id_ticket]) ticketMap[l.id_ticket] = {
         id_ticket: l.id_ticket, date_vente: l.date_vente,
+        heure: l.heure,
         ca: 0, ca_avant: 0, ca_apres: 0, qte: 0, nbPers: 0
       }
       const t = ticketMap[l.id_ticket]
@@ -189,6 +202,26 @@ export default function Performance() {
       else t.ca_apres += l.prixU
     }
     const tickets = Object.values(ticketMap)
+
+    // ── AGRÉGATION PAR HEURE ──────────────────────────────────────────
+    // Un ticket est affecté à son heure de vente, puis les mêmes indicateurs
+    // que la vue journalière sont calculés à partir des totaux du ticket.
+    const heureMap = {}
+    for (const t of tickets) {
+      const h = t.heure
+      if (!heureMap[h]) heureMap[h] = { heure: h, ca: 0, qte: 0, nb: 0 }
+      heureMap[h].ca += t.ca
+      heureMap[h].qte += t.qte
+      heureMap[h].nb += t.nbPers
+    }
+    const heures = Object.values(heureMap).map(h => ({
+      ...h,
+      label: formatHourRange(h.heure),
+      ca: parseFloat(h.ca.toFixed(2)),
+      pm: h.nb > 0 ? parseFloat((h.ca / h.nb).toFixed(2)) : 0,
+      iv: h.nb > 0 ? parseFloat((h.qte / h.nb).toFixed(2)) : 0,
+      prix: h.qte > 0 ? parseFloat((h.ca / h.qte).toFixed(2)) : 0,
+    })).sort((a, b) => a.heure - b.heure)
 
     // ── AGRÉGATION PAR JOUR ───────────────────────────────────────────
     const jourMap = {}
@@ -257,7 +290,7 @@ export default function Performance() {
     const famillesDisp = ['all', ...Array.from(new Set(prodList.map(p => p.famille))).sort()]
 
     setData({
-      jours, produits: prodList, familles: famList, famillesDisp,
+      jours, heures, produits: prodList, familles: famList, famillesDisp,
       total: {
         ca:     parseFloat(totalCA.toFixed(2)),
         qte:    totalQte,
@@ -320,6 +353,9 @@ export default function Performance() {
     if (view === 'jour') {
       header = ['Date','Jour','CA','CA<14h','CA>14h','Tickets','QTE','PM','IV','Prix moy.']
       rows = sorted(data.jours, 'date').map(j => [j.date,j.jour,j.ca,j.ca_avant,j.ca_apres,j.nb,j.qte,j.pm,j.iv,j.prix])
+    } else if (view === 'heure') {
+      header = ['Créneau','CA','Part CA','Tickets','QTE','PM','IV','Prix moy.']
+      rows = data.heures.map(h => [h.label,h.ca,data.total.ca > 0 ? (h.ca/data.total.ca*100).toFixed(1)+'%' : '0%',h.nb,h.qte,h.pm,h.iv,h.prix])
     } else if (view === 'produit') {
       header = ['Produit','Famille','CA','%CA','QTE','Tickets','PM','IV']
       rows = sorted(produitsFiltres).map(p => [p.produit,p.famille,p.ca,p.pct+'%',p.qte,p.tickets,p.pm,p.iv])
@@ -436,11 +472,12 @@ export default function Performance() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', gap: '8px', flexWrap: 'wrap' }}>
               <div className="tabs" style={{ flex: 1, minWidth: 200 }}>
                 <button className={`tab-btn${view==='jour' ? ' active' : ''}`} onClick={() => setView('jour')}>Jours</button>
+                <button className={`tab-btn${view==='heure' ? ' active' : ''}`} onClick={() => setView('heure')}>Heures</button>
                 <button className={`tab-btn${view==='produit' ? ' active' : ''}`} onClick={() => setView('produit')}>Produits</button>
                 <button className={`tab-btn${view==='famille' ? ' active' : ''}`} onClick={() => setView('famille')}>Familles</button>
               </div>
               <div style={{ display: 'flex', gap: '6px' }}>
-                {view !== 'jour' && [{k:'ca',l:'CA'},{k:'qte',l:'Qté'},{k:'tickets',l:'Tickets'}].map(s => (
+                {view !== 'jour' && view !== 'heure' && [{k:'ca',l:'CA'},{k:'qte',l:'Qté'},{k:'tickets',l:'Tickets'}].map(s => (
                   <button key={s.k} className={`btn btn-sm ${sortBy===s.k ? 'btn-primary' : 'btn-outline'}`} onClick={() => setSortBy(s.k)}>{s.l}</button>
                 ))}
                 <button className="btn btn-outline btn-sm" onClick={exportCSV}><Download size={13} /></button>
@@ -486,6 +523,35 @@ export default function Performance() {
                         <td style={{ padding: '0.65rem 0.75rem', borderBottom: idx < arr.length-1 ? '1.5px solid var(--outside-cream)' : 'none', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtDT(j.prix)}</td>
                         <td style={{ padding: '0.65rem 0.75rem', borderBottom: idx < arr.length-1 ? '1.5px solid var(--outside-cream)' : 'none', textAlign: 'right', fontSize: '0.78rem', color: 'var(--outside-amber)', fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtDT(j.ca_avant)}</td>
                         <td style={{ padding: '0.65rem 1rem 0.65rem 0.75rem', borderBottom: idx < arr.length-1 ? '1.5px solid var(--outside-cream)' : 'none', textAlign: 'right', fontSize: '0.78rem', color: 'var(--outside-teal)', fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtDT(j.ca_apres)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* VUE HEURES */}
+            {view === 'heure' && (
+              <div className="card" style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                  <thead>
+                    <tr>
+                      {['Créneau','CA','% CA','Tickets','Qté','PM','IV','Prix moy.'].map((h, i) => (
+                        <th key={h} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '0.6rem ' + (i === 0 ? '1rem' : '0.75rem'), fontSize: '0.6rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted)', background: 'var(--outside-cream)', borderBottom: '1.5px solid var(--outside-cream2)', whiteSpace: 'nowrap' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.heures.map((h, idx, arr) => (
+                      <tr key={h.heure}>
+                        <td style={{ padding: '0.65rem 1rem', borderBottom: idx < arr.length-1 ? '1.5px solid var(--outside-cream)' : 'none', fontWeight: 800, whiteSpace: 'nowrap' }}>{h.label}</td>
+                        <td style={{ padding: '0.65rem 0.75rem', borderBottom: idx < arr.length-1 ? '1.5px solid var(--outside-cream)' : 'none', textAlign: 'right', fontWeight: 800, whiteSpace: 'nowrap' }}>{fmtDT(h.ca)}</td>
+                        <td style={{ padding: '0.65rem 0.75rem', borderBottom: idx < arr.length-1 ? '1.5px solid var(--outside-cream)' : 'none', textAlign: 'right', color: 'var(--outside-orange)', fontWeight: 700 }}>{data.total.ca > 0 ? fmtD(h.ca/data.total.ca*100, 1) : '0,0'}%</td>
+                        <td style={{ padding: '0.65rem 0.75rem', borderBottom: idx < arr.length-1 ? '1.5px solid var(--outside-cream)' : 'none', textAlign: 'right', fontWeight: 700 }}>{fmtN(h.nb)}</td>
+                        <td style={{ padding: '0.65rem 0.75rem', borderBottom: idx < arr.length-1 ? '1.5px solid var(--outside-cream)' : 'none', textAlign: 'right', fontWeight: 700 }}>{fmtN(h.qte)}</td>
+                        <td style={{ padding: '0.65rem 0.75rem', borderBottom: idx < arr.length-1 ? '1.5px solid var(--outside-cream)' : 'none', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtDT(h.pm)}</td>
+                        <td style={{ padding: '0.65rem 0.75rem', borderBottom: idx < arr.length-1 ? '1.5px solid var(--outside-cream)' : 'none', textAlign: 'right', fontWeight: 700 }}>{fmtD(h.iv)}</td>
+                        <td style={{ padding: '0.65rem 1rem 0.65rem 0.75rem', borderBottom: idx < arr.length-1 ? '1.5px solid var(--outside-cream)' : 'none', textAlign: 'right', fontWeight: 700, whiteSpace: 'nowrap' }}>{fmtDT(h.prix)}</td>
                       </tr>
                     ))}
                   </tbody>
