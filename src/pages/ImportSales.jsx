@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { parseSalesFile, summarizeSales } from '../lib/importSales'
 
@@ -10,6 +10,27 @@ export default function ImportSales() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const lock = useRef(false)
+  const [latest, setLatest] = useState(null)
+  const [latestLoading, setLatestLoading] = useState(true)
+  const [latestError, setLatestError] = useState('')
+
+  async function refreshLatest() {
+    setLatestLoading(true); setLatestError('')
+    try {
+      const { data, error: err } = await supabase.from('transaction')
+        .select('date_vente,heure')
+        .not('date_vente', 'is', null).not('heure', 'is', null)
+        .order('date_vente', { ascending: false }).order('heure', { ascending: false })
+        .limit(1).maybeSingle()
+      if (err) throw err
+      setLatest(data)
+    } catch (_) {
+      setLatest(null)
+      setLatestError('Impossible de récupérer le dernier ticket.')
+    } finally { setLatestLoading(false) }
+  }
+
+  useEffect(() => { refreshLatest() }, [])
 
   async function choose(e) {
     const file = e.target.files[0]
@@ -29,13 +50,21 @@ export default function ImportSales() {
       if (err) throw err
       setResult(data); setPreview(null)
     } catch (err) { setError(`Import non confirmé : ${err.message}. Vous pouvez réessayer : les tickets déjà présents seront ignorés.`) }
-    finally { lock.current = false; setBusy(false) }
+    finally { await refreshLatest(); lock.current = false; setBusy(false) }
   }
 
   const daily = preview ? summarizeSales(preview.rows) : result?.summary || []
   return <div className="page-content" style={{ maxWidth: 1000, margin: '0 auto', padding: 24 }}>
     <h1>Importer les ventes</h1>
     <p>Chargez l’export XML de la caisse. Vérifiez les montants avant de lancer l’import.</p>
+    <div className="card" role="status" style={{ padding: 20, marginTop: 20 }}>
+      <strong>Dernier ticket chargé</strong>
+      <p>{latestLoading ? 'Chargement…' : latestError || (latest
+        ? `${latest.date_vente.split('-').reverse().join('/')} à ${latest.heure.slice(0, 8)}`
+        : 'Aucun ticket chargé.')}</p>
+      <p style={{ fontSize: '0.875rem' }}>Date et heure de vente du ticket le plus récent en base.</p>
+      {latestError && <button className="btn" onClick={refreshLatest} disabled={busy}>Réessayer</button>}
+    </div>
     <div className="card" style={{ padding: 24, margin: '24px 0' }}>
       <label htmlFor="sales-xml" style={{ display: 'block', marginBottom: 12, fontWeight: 600 }}>Fichier XML de ventes</label>
       <input id="sales-xml" type="file" accept=".xml,application/xml,text/xml" disabled={busy} onChange={choose} />
