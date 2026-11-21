@@ -50,6 +50,7 @@ const MORE_SECTIONS = [
     minRole: 'manager',
     items: [
       { to: '/finance',         icon: Wallet,       label: 'Finance',          minRole: 'manager' },
+      { to: '/import-ventes',   icon: Database,     label: 'Importer les ventes', minRole: 'manager' },
       { to: '/admin-tasks',     icon: ClipboardList,label: 'Tâches admin',     minRole: 'manager' },
       { to: '/equipe',          icon: Users,        label: 'Comptes équipe',   minRole: 'admin'   },
       { to: '/catalogue',       icon: Database,     label: 'Catalogue',        minRole: 'manager' },
@@ -74,6 +75,7 @@ const ALL_NAV = [
   { to: '/objectifs',       icon: Target,       label: 'Objectifs',        section: null,             minRole: 'manager'  },
   { to: '/staff',           icon: UsersRound,   label: 'Staff',            section: 'Équipe',         minRole: 'manager'  },
   { to: '/finance',         icon: Wallet,       label: 'Finance',          section: 'Administration', minRole: 'manager'  },
+  { to: '/import-ventes',   icon: Database,     label: 'Importer les ventes', section: null, minRole: 'manager' },
   { to: '/admin-tasks',     icon: ClipboardList,label: 'Tâches admin',     section: null,             minRole: 'manager'  },
   { to: '/catalogue',       icon: Database,     label: 'Catalogue',        section: null,             minRole: 'manager'  },
   { to: '/factures',        icon: Receipt,      label: 'Factures',         section: null,             minRole: 'manager'  },
