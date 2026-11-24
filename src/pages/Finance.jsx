@@ -672,9 +672,9 @@ function TabCoutStock({ period }) {
       supabase.from('stock_movements').select('item_id,qty,prix,stock_items(name,matiere_ref)')
         .eq('type','reception').gte('created_at', dateFrom).lte('created_at', dateTo+'T23:59:59'),
       supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire')
-        .lt('date_inventaire', dateFrom).order('date_inventaire',{ascending:false}).limit(2000),
+        .lte('date_inventaire', dateFrom).order('date_inventaire',{ascending:false}).limit(2000),
       supabase.from('stock_inventaires').select('item_name,qte_physique,date_inventaire')
-        .gte('date_inventaire', dateFrom).lte('date_inventaire', dateTo).order('date_inventaire',{ascending:false}).limit(2000),
+        .gt('date_inventaire', dateFrom).lte('date_inventaire', dateTo).order('date_inventaire',{ascending:false}).limit(2000),
       supabase.from('matiere_premiere').select('matiere,prix,quantite').eq('actif',true),
       supabase.from('stock_items').select('id,name,matiere_ref').eq('active',true),
     ])
