@@ -23,6 +23,20 @@ import Objectifs from './pages/Objectifs'
 import ImportSales from './pages/ImportSales'
 import { Spinner } from './components/UI'
 
+export function EmployeeImport() {
+  const { user, profile, loading, signOut } = useAuth()
+  if (loading) return <Spinner size={32} />
+  if (!user) return <Navigate to="/employes/connexion" replace />
+  if (!hasRole(profile, 'barista') || profile?.actif === false) return <p role="alert">Compte non autorisé. <button onClick={signOut}>Se déconnecter</button></p>
+  return <div>
+    <header style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+      <strong>Outside · Espace employés — {profile.name}</strong>
+      <button className="btn" onClick={signOut}>Se déconnecter</button>
+    </header>
+    <ImportSales />
+  </div>
+}
+
 function ProtectedLayout() {
   const { user, loading } = useAuth()
 
@@ -83,6 +97,8 @@ function AppRoutes() {
 
   return (
     <Routes>
+      <Route path="/employes/connexion" element={user ? <Navigate to="/employes/importation" replace /> : <LoginPage employee />} />
+      <Route path="/employes/importation" element={<EmployeeImport />} />
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
       <Route path="/*" element={<ProtectedLayout />} />
     </Routes>

@@ -17,11 +17,7 @@ export default function ImportSales() {
   async function refreshLatest() {
     setLatestLoading(true); setLatestError('')
     try {
-      const { data, error: err } = await supabase.from('transaction')
-        .select('date_vente,heure')
-        .not('date_vente', 'is', null).not('heure', 'is', null)
-        .order('date_vente', { ascending: false }).order('heure', { ascending: false })
-        .limit(1).maybeSingle()
+      const { data, error: err } = await supabase.rpc('latest_sales_ticket')
       if (err) throw err
       setLatest(data)
     } catch (_) {
