@@ -156,7 +156,7 @@ function TabResultat({ period, isAdmin }) {
 
     // Salaires + primes
     const [{ data: salaires }, { data: primes }] = await Promise.all([
-      supabase.from('finance_salaires').select('salaire_base').eq('actif', true),
+      supabase.from('finance_salaires').select('salaire_base').or('actif.eq.true,salaire_base.neq.0'),
       supabase.from('finance_primes').select('montant').eq('periode', period),
     ])
     const totalSalaires = (salaires || []).reduce((s, x) => s + parseFloat(x.salaire_base || 0), 0)
@@ -510,7 +510,7 @@ function TabSalaires({ period, isAdmin }) {
   async function fetchData() {
     setLoading(true)
     const [{ data: sal }, { data: pri }] = await Promise.all([
-      supabase.from('finance_salaires').select('*').eq('actif', true).order('staff_role'),
+      supabase.from('finance_salaires').select('*').or('actif.eq.true,salaire_base.neq.0').order('staff_role'),
       supabase.from('finance_primes').select('*').eq('periode', period),
     ])
     setSalaires(sal || [])
@@ -521,7 +521,8 @@ function TabSalaires({ period, isAdmin }) {
   async function saveSalaire(form) {
     setSaving(true)
     await supabase.from('finance_salaires').update({ salaire_base: form.salaire_base, updated_at: new Date().toISOString() }).eq('id', form.id)
-    setSalaires(prev => prev.map(s => s.id === form.id ? { ...s, ...form } : s))
+    setSalaires(prev => prev.map(s => s.id === form.id ? { ...s, ...form } : s)
+      .filter(s => s.actif === true || Number(s.salaire_base || 0) !== 0))
     setSaving(false); setEditSal(null)
   }
 
@@ -566,6 +567,7 @@ function TabSalaires({ period, isAdmin }) {
 
       {/* SALAIRES */}
       <div className="section-label">Salaires de base</div>
+      <p style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>Les employés inactifs restent inclus tant que leur salaire est différent de 0 DT.</p>
       <div className="card" style={{ marginBottom: '1rem' }}>
         {salaires.map((s, idx) => (
           <div key={s.id} style={{ padding: '0.75rem 1rem', borderBottom: idx < salaires.length-1 ? '1.5px solid var(--outside-cream)' : 'none', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -574,7 +576,7 @@ function TabSalaires({ period, isAdmin }) {
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 700, fontSize: '0.875rem' }}>{s.staff_name}</div>
-              <div style={{ fontSize: '0.68rem', color: ROLE_COLORS[s.staff_role], fontWeight: 700 }}>{s.staff_role}</div>
+              <div style={{ fontSize: '0.68rem', color: ROLE_COLORS[s.staff_role], fontWeight: 700 }}>{s.staff_role}{s.actif === false ? ' · Inactif' : ''}</div>
             </div>
             {editSal?.id === s.id ? (
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
