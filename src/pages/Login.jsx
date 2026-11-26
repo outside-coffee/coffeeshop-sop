@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { Spinner } from '../components/UI'
 
-export default function LoginPage() {
+export default function LoginPage({ employee = false }) {
+  const destination = employee ? '/employes/importation' : '/'
   const { signIn } = useAuth()
   const navigate   = useNavigate()
 
@@ -58,7 +59,7 @@ export default function LoginPage() {
       setLoading(false)
       return
     }
-    navigate('/')
+    navigate(destination)
   }
 
   function deletePin() {
@@ -77,7 +78,7 @@ export default function LoginPage() {
       setLoading(false)
       return
     }
-    navigate('/')
+    navigate(destination)
   }
 
   function reset() {
@@ -100,6 +101,9 @@ export default function LoginPage() {
           <p>Your Everyday Escape</p>
         </div>
 
+        <h2>{employee ? 'Espace employés' : 'Connexion'}</h2>
+        {employee && <p>Connecte-toi pour importer les ventes de la caisse.</p>}
+        <p><Link to={employee ? '/login' : '/employes/connexion'}>{employee ? 'Accès gestion' : 'Espace employés — Importation'}</Link></p>
         {/* ÉTAPE 1 — SÉLECTION PROFIL */}
         {step === 'select' && (
           <form onSubmit={handleSelect}>

@@ -23,6 +23,7 @@ const MORE_SECTIONS = [
     label: 'Opérationnel',
     minRole: 'barista',
     items: [
+      { to: '/employes/importation', icon: Database, label: 'Importation de données', minRole: 'barista' },
       { to: '/rapport',     icon: Coffee,       label: 'Rapport shift',   minRole: 'barista' },
       { to: '/stock',       icon: Package,      label: 'Stock',           minRole: 'barista' },
       { to: '/recettes',    icon: BookOpen,     label: 'Recettes',        minRole: 'barista' },
@@ -63,6 +64,7 @@ const MORE_SECTIONS = [
 // ── DESKTOP SIDEBAR — flat list avec sections ────────────────────────────
 const ALL_NAV = [
   { to: '/',            icon: BarChart2,    label: 'Dashboard',      section: "Vue d'ensemble", minRole: 'barista'  },
+  { to: '/employes/importation', icon: Database, label: 'Importation de données', section: 'Employés', minRole: 'barista' },
   { to: '/ouverture',   icon: CheckSquare,  label: 'Ouverture',      section: 'Opérationnel',   minRole: 'barista'  },
   { to: '/shift-matin', icon: CheckSquare,  label: 'Fin shift matin',section: null,             minRole: 'barista'  },
   { to: '/rapport',     icon: Coffee,       label: 'Shift',          section: null,             minRole: 'barista'  },
